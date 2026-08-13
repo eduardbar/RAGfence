@@ -502,7 +502,8 @@ def test_enum_columns_persist_lowercase_values_via_values_callable() -> None:
             assert isinstance(enum_type, Enum), (table_name, column_name)
             assert enum_type.values_callable is not None, (table_name, column_name)
             member_values = [
-                member.value for member in enum_type.enum_class  # type: ignore[union-attr]
+                member.value
+                for member in enum_type.enum_class  # type: ignore[union-attr]
             ]
             assert all(isinstance(v, str) and v == v.lower() for v in member_values), (
                 table_name,

@@ -4,9 +4,10 @@ Revision ID: 0003
 Revises: 0002
 Create Date: 2026-08-13
 """
+
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -15,17 +16,27 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0003"
-down_revision: Union[str, None] = "0002"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 PK_UUID = sa.Uuid()
 TS = sa.TIMESTAMP(timezone=True)
-CLS = postgresql.ENUM("public", "internal", "confidential", "restricted", name="classification", create_type=False)
-DOC_STATUS = postgresql.ENUM("pending", "ready", "failed", name="document_status", create_type=False)
-FINDING_SEV = postgresql.ENUM("low", "medium", "high", "critical", name="finding_severity", create_type=False)
-RUN_STATUS = postgresql.ENUM("running", "passed", "failed", "crashed", name="run_status", create_type=False)
-SCENARIO_OUTCOME = postgresql.ENUM("pass", "warning", "fail", "critical", name="scenario_outcome", create_type=False)
+CLS = postgresql.ENUM(
+    "public", "internal", "confidential", "restricted", name="classification", create_type=False
+)
+DOC_STATUS = postgresql.ENUM(
+    "pending", "ready", "failed", name="document_status", create_type=False
+)
+FINDING_SEV = postgresql.ENUM(
+    "low", "medium", "high", "critical", name="finding_severity", create_type=False
+)
+RUN_STATUS = postgresql.ENUM(
+    "running", "passed", "failed", "crashed", name="run_status", create_type=False
+)
+SCENARIO_OUTCOME = postgresql.ENUM(
+    "pass", "warning", "fail", "critical", name="scenario_outcome", create_type=False
+)
 UUID_ARRAY = postgresql.ARRAY(sa.Uuid())
 
 
@@ -157,7 +168,9 @@ def upgrade() -> None:
         sa.Column("case_id", sa.Uuid(), sa.ForeignKey("evaluation_cases.id"), nullable=False),
         sa.Column("passed", sa.Boolean(), nullable=False),
         sa.Column("outcome", SCENARIO_OUTCOME, nullable=False),
-        sa.Column("retrieved_chunk_ids", UUID_ARRAY, nullable=False, server_default=sa.text("'{}'")),
+        sa.Column(
+            "retrieved_chunk_ids", UUID_ARRAY, nullable=False, server_default=sa.text("'{}'")
+        ),
         sa.Column("answer", sa.Text(), nullable=True),
         sa.Column("latency_ms", sa.Integer(), nullable=False),
         sa.Column("created_at", TS, nullable=False, server_default=sa.text("now()")),

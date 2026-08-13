@@ -14,8 +14,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from ragfence.db.base import Base
 from ragfence.db import models  # noqa: F401  (register every table on Base.metadata)
+from ragfence.db.base import Base
 
 config = context.config
 

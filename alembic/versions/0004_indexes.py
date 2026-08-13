@@ -4,18 +4,19 @@ Revision ID: 0004
 Revises: 0003
 Create Date: 2026-08-13
 """
+
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0004"
-down_revision: Union[str, None] = "0003"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0003"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -59,10 +60,14 @@ def upgrade() -> None:
     op.create_index(
         "ix_evaluation_cases_suite_scenario", "evaluation_cases", ["suite_id", "scenario_id"]
     )
-    op.create_index("ix_evaluation_runs_suite_started", "evaluation_runs", ["suite_id", "started_at"])
+    op.create_index(
+        "ix_evaluation_runs_suite_started", "evaluation_runs", ["suite_id", "started_at"]
+    )
     op.create_index("ix_evaluation_results_run_case", "evaluation_results", ["run_id", "case_id"])
     op.create_index("ix_evaluation_results_run_passed", "evaluation_results", ["run_id", "passed"])
-    op.create_index("ix_security_findings_run_severity", "security_findings", ["run_id", "severity"])
+    op.create_index(
+        "ix_security_findings_run_severity", "security_findings", ["run_id", "severity"]
+    )
     op.create_index("ix_security_findings_category", "security_findings", ["category"])
     op.create_index("ix_security_findings_case_id", "security_findings", ["case_id"])
 
