@@ -1,4 +1,4 @@
-"""Deterministic Acme Corp synthetic dataset (PR 1: org model, corpus, checksums)."""
+"""Deterministic Acme Corp synthetic dataset (PR 1: org model, corpus, checksums; PR 2: loader)."""
 
 from ragfence.datasets.acme import (
     AcmeCorpDataset,
@@ -10,6 +10,7 @@ from ragfence.datasets.acme import (
     build_acme_corp,
 )
 from ragfence.datasets.constants import SEED
+from ragfence.datasets.loader import seed_acme_corp
 
 __all__ = [
     "AcmeCorpDataset",
@@ -20,4 +21,5 @@ __all__ = [
     "AcmeUser",
     "SEED",
     "build_acme_corp",
+    "seed_acme_corp",
 ]
