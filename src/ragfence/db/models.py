@@ -49,6 +49,18 @@ class RunStatus(StrEnum):
     CRASHED = "crashed"
 
 
+def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    """Map a Python enum class to its member VALUES for native Postgres enums.
+
+    Migration 0002 creates native enum labels in lowercase (``'public'``,
+    ``'running'``, ...). Without ``values_callable`` SQLAlchemy would persist
+    member NAMES (uppercase), which PostgreSQL enum comparisons reject and the
+    ACL rank CASE could never match (review finding R4-001).
+    """
+
+    return [member.value for member in enum_cls]
+
+
 class Tenant(Base):
     """Isolation boundary #1: every tenant-scoped row belongs to one tenant."""
 
@@ -133,7 +145,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     classification: Mapped[Classification] = mapped_column(
-        postgresql.ENUM(Classification, name="classification", create_type=False),
+        postgresql.ENUM(
+            Classification,
+            name="classification",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         server_default="internal",
     )
@@ -186,12 +203,22 @@ class Document(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
     checksum: Mapped[str] = mapped_column(Text, nullable=False)
     classification: Mapped[Classification] = mapped_column(
-        postgresql.ENUM(Classification, name="classification", create_type=False),
+        postgresql.ENUM(
+            Classification,
+            name="classification",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         server_default="internal",
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        postgresql.ENUM(DocumentStatus, name="document_status", create_type=False),
+        postgresql.ENUM(
+            DocumentStatus,
+            name="document_status",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         server_default="pending",
     )
@@ -236,7 +263,12 @@ class DocumentACL(Base):
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     department_id: Mapped[UUID | None] = mapped_column(ForeignKey("departments.id"), nullable=True)
     classification: Mapped[Classification] = mapped_column(
-        postgresql.ENUM(Classification, name="classification", create_type=False),
+        postgresql.ENUM(
+            Classification,
+            name="classification",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         server_default="internal",
     )
@@ -364,14 +396,24 @@ class EvaluationRun(Base):
     )
     suite_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_suites.id"), nullable=False)
     status: Mapped[RunStatus] = mapped_column(
-        postgresql.ENUM(RunStatus, name="run_status", create_type=False),
+        postgresql.ENUM(
+            RunStatus,
+            name="run_status",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
         server_default="running",
     )
     score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     threshold: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("80"))
     result: Mapped[ScenarioOutcome | None] = mapped_column(
-        postgresql.ENUM(ScenarioOutcome, name="scenario_outcome", create_type=False),
+        postgresql.ENUM(
+            ScenarioOutcome,
+            name="scenario_outcome",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=True,
     )
     started_at: Mapped[datetime] = mapped_column(
@@ -400,7 +442,12 @@ class EvaluationResult(Base):
     case_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_cases.id"), nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     outcome: Mapped[ScenarioOutcome] = mapped_column(
-        postgresql.ENUM(ScenarioOutcome, name="scenario_outcome", create_type=False),
+        postgresql.ENUM(
+            ScenarioOutcome,
+            name="scenario_outcome",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
     )
     retrieved_chunk_ids: Mapped[list[UUID]] = mapped_column(
@@ -439,7 +486,12 @@ class SecurityFinding(Base):
     run_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_runs.id"), nullable=False)
     case_id: Mapped[UUID | None] = mapped_column(ForeignKey("evaluation_cases.id"), nullable=True)
     severity: Mapped[FindingSeverity] = mapped_column(
-        postgresql.ENUM(FindingSeverity, name="finding_severity", create_type=False),
+        postgresql.ENUM(
+            FindingSeverity,
+            name="finding_severity",
+            create_type=False,
+            values_callable=_enum_values,
+        ),
         nullable=False,
     )
     category: Mapped[str] = mapped_column(Text, nullable=False)

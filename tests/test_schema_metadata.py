@@ -473,3 +473,38 @@ def test_metadata_never_emits_create_type_for_enum_columns() -> None:
     for table_name in EXPECTED_TABLES:
         ddl = str(CreateTable(Base.metadata.tables[table_name]).compile(dialect=dialect))
         assert "create type" not in ddl.lower(), table_name
+
+
+NATIVE_ENUM_COLUMNS: dict[str, list[str]] = {
+    "users": ["classification"],
+    "documents": ["classification", "status"],
+    "document_acl": ["classification"],
+    "evaluation_runs": ["status", "result"],
+    "evaluation_results": ["outcome"],
+    "security_findings": ["severity"],
+}
+
+
+def test_enum_columns_persist_lowercase_values_via_values_callable() -> None:
+    """Regression (review finding R4-001): native enum labels in migration 0002
+    are lowercase ('public', 'running', ...), so every postgresql.ENUM column
+    MUST coerce Python enum members to their .value via values_callable.
+
+    Without it, SQLAlchemy persists member NAMES (uppercase 'CONFIDENTIAL',
+    'RUNNING'), which PostgreSQL enum comparisons reject and the ACL rank CASE
+    can never match. This test pins the coercion contract without a database.
+    """
+    for table_name, column_names in NATIVE_ENUM_COLUMNS.items():
+        table = Base.metadata.tables[table_name]
+        for column_name in column_names:
+            column = table.c[column_name]
+            enum_type = column.type
+            assert isinstance(enum_type, Enum), (table_name, column_name)
+            assert enum_type.values_callable is not None, (table_name, column_name)
+            member_values = [
+                member.value for member in enum_type.enum_class  # type: ignore[union-attr]
+            ]
+            assert all(isinstance(v, str) and v == v.lower() for v in member_values), (
+                table_name,
+                column_name,
+            )
