@@ -193,3 +193,42 @@ def test_invalid_allowlist_type_rejected() -> None:
 def test_document_policy_requires_classification() -> None:
     with pytest.raises(ValidationError):
         DocumentPolicy()
+
+
+def test_authorization_context_jsonb_roundtrip_is_lossless() -> None:
+    original = _ctx(source="synthetic")
+    dumped = original.model_dump_json()
+    parsed = json.loads(dumped)
+    assert isinstance(parsed["allowed_user_ids"], list)
+    assert isinstance(parsed["allowed_group_ids"], list)
+    assert isinstance(parsed["department_id"], str)
+    roundtripped = AuthorizationContext.model_validate_json(dumped)
+    assert roundtripped == original
+    assert roundtripped.allowed_user_ids == original.allowed_user_ids
+    assert roundtripped.allowed_group_ids == original.allowed_group_ids
+    assert roundtripped.department_id == original.department_id
+    assert all(isinstance(member, UUID) for member in roundtripped.allowed_user_ids)
+
+
+def test_authorization_context_jsonb_roundtrip_preserves_source() -> None:
+    for source in ("synthetic", "oidc", "api_token"):
+        original = _ctx(source=source)
+        roundtripped = AuthorizationContext.model_validate_json(original.model_dump_json())
+        assert roundtripped.source == source
+
+
+def test_authorization_context_jsonb_roundtrip_null_department() -> None:
+    original = AuthorizationContext(
+        tenant_id=_uuid(),
+        user_id=_uuid(),
+        department_id=None,
+        classification=Classification.PUBLIC,
+        allowed_user_ids=set(),
+        allowed_group_ids=set(),
+        is_authenticated=False,
+        source="api_token",
+    )
+    roundtripped = AuthorizationContext.model_validate_json(original.model_dump_json())
+    assert roundtripped == original
+    assert roundtripped.department_id is None
+    assert roundtripped.classification is Classification.PUBLIC
