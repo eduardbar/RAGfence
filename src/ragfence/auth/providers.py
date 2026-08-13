@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ragfence.auth.errors import IdentityNotFoundError
+from ragfence.auth.errors import IdentityInactiveError, IdentityNotFoundError
 from ragfence.auth.identity import AuthenticatedIdentity, IdentityProvider
 from ragfence.auth.registry import TokenRegistry
 from ragfence.core.models import AuthorizationContext
@@ -29,6 +29,8 @@ class SyntheticIdentityProvider:
 
     def resolve(self, principal: str) -> AuthenticatedIdentity:
         user = self._lookup_user(principal)
+        if not user.is_active:
+            raise IdentityInactiveError(principal)
         return AuthenticatedIdentity(
             user_id=user.id,
             tenant_id=user.tenant_id,

@@ -123,6 +123,9 @@ class AcmeUser:
     email: str
     name: str
     classification: Classification
+    # Activation state mirrors ``users.is_active`` (BACKEND_SCHEMA §4); identity
+    # resolution must fail closed for deactivated principals.
+    is_active: bool = True
 
 
 @dataclass(frozen=True, slots=True)

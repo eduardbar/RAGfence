@@ -12,17 +12,31 @@ rebuilding the context twice and asserting byte-for-byte equality.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from ragfence.auth.builder import build_authorization_context
-from ragfence.auth.errors import IdentityNotFoundError
-from ragfence.auth.providers import AcmeDirectory, SyntheticIdentityProvider
+from ragfence.auth.errors import IdentityInactiveError, IdentityNotFoundError
+from ragfence.auth.providers import (
+    AcmeDirectory,
+    ApiTokenIdentityProvider,
+    SyntheticIdentityProvider,
+)
+from ragfence.auth.registry import InMemoryTokenRegistry
 from ragfence.core.enums import Classification
 from ragfence.datasets import SEED, build_acme_corp
 
 ENGINEERING_EMAIL = "engineering_employee@acme-corp.example"
 CFO_EMAIL = "cfo@acme-corp.example"
 UNKNOWN_EMAIL = "ghost@acme-corp.example"
+
+
+def _inactive_dataset(email: str = ENGINEERING_EMAIL):
+    ds = build_acme_corp(SEED)
+    users = dict(ds.users)
+    users[email] = replace(users[email], is_active=False)
+    return replace(ds, users=users)
 
 
 def test_engineering_user_derives_server_side_context() -> None:
@@ -83,3 +97,28 @@ def test_unknown_email_fails_closed() -> None:
             provider=SyntheticIdentityProvider(ds),
             directory=AcmeDirectory(ds),
         )
+
+
+def test_inactive_user_fails_closed_via_synthetic_provider() -> None:
+    """R5: deactivated principals must NOT resolve to an authenticated context."""
+    ds = _inactive_dataset()
+    with pytest.raises(IdentityInactiveError):
+        SyntheticIdentityProvider(ds).resolve(ENGINEERING_EMAIL)
+
+
+def test_inactive_user_fails_closed_through_builder() -> None:
+    ds = _inactive_dataset()
+    with pytest.raises(IdentityInactiveError):
+        build_authorization_context(
+            ENGINEERING_EMAIL,
+            provider=SyntheticIdentityProvider(ds),
+            directory=AcmeDirectory(ds),
+        )
+
+
+def test_inactive_user_fails_closed_via_api_token_path() -> None:
+    ds = _inactive_dataset(CFO_EMAIL)
+    registry = InMemoryTokenRegistry({"tok-123": CFO_EMAIL})
+    provider = ApiTokenIdentityProvider(registry, user_provider=SyntheticIdentityProvider(ds))
+    with pytest.raises(IdentityInactiveError):
+        provider.resolve("tok-123")
