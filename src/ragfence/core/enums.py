@@ -4,10 +4,10 @@ Pure value objects: str-based so they serialize to plain strings and validate
 arbitrary input without any I/O.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Classification(str, Enum):
+class Classification(StrEnum):
     """Document classification; rank orders public < internal < confidential < restricted."""
 
     PUBLIC = "public"
@@ -20,20 +20,20 @@ class Classification(str, Enum):
         return _CLASSIFICATION_RANK[self]
 
 
-class DocumentStatus(str, Enum):
+class DocumentStatus(StrEnum):
     PENDING = "pending"
     READY = "ready"
     FAILED = "failed"
 
 
-class FindingSeverity(str, Enum):
+class FindingSeverity(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class ScenarioOutcome(str, Enum):
+class ScenarioOutcome(StrEnum):
     PASS = "pass"
     WARNING = "warning"
     FAIL = "fail"
