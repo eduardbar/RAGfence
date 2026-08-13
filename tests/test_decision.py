@@ -20,7 +20,9 @@ ENGINEERING = uuid.uuid4()
 FINANCE = uuid.uuid4()
 
 
-def _policy(*, classification: Classification = Classification.INTERNAL, department_id: UUID | None = None) -> DocumentPolicy:
+def _policy(
+    *, classification: Classification = Classification.INTERNAL, department_id: UUID | None = None
+) -> DocumentPolicy:
     return DocumentPolicy(
         classification=classification,
         department_id=department_id,

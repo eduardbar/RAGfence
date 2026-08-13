@@ -22,13 +22,19 @@ def decide(policy: DocumentPolicy, ctx: AuthorizationContext) -> PolicyDecision:
     evaluated_at = datetime.now(UTC)
 
     if policy.classification.rank > ctx.classification.rank:
-        return PolicyDecision(allowed=False, reasons=[REASON_CLASSIFICATION_ESCALATION], evaluated_at=evaluated_at)
+        return PolicyDecision(
+            allowed=False, reasons=[REASON_CLASSIFICATION_ESCALATION], evaluated_at=evaluated_at
+        )
     if ctx.user_id in policy.allowed_user_ids:
         return PolicyDecision(allowed=True, reasons=[], evaluated_at=evaluated_at)
     if ctx.allowed_group_ids.intersection(policy.allowed_group_ids):
         return PolicyDecision(allowed=True, reasons=[], evaluated_at=evaluated_at)
     if policy.department_id is None:
-        return PolicyDecision(allowed=False, reasons=[REASON_NO_IMPLICIT_DEPARTMENT_ACCESS], evaluated_at=evaluated_at)
+        return PolicyDecision(
+            allowed=False, reasons=[REASON_NO_IMPLICIT_DEPARTMENT_ACCESS], evaluated_at=evaluated_at
+        )
     if policy.department_id == ctx.department_id:
         return PolicyDecision(allowed=True, reasons=[], evaluated_at=evaluated_at)
-    return PolicyDecision(allowed=False, reasons=[REASON_DENY_BY_DEFAULT], evaluated_at=evaluated_at)
+    return PolicyDecision(
+        allowed=False, reasons=[REASON_DENY_BY_DEFAULT], evaluated_at=evaluated_at
+    )
