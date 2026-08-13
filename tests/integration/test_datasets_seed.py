@@ -12,11 +12,12 @@ openspec/changes/ragfence-acme-dataset/specs/synthetic-dataset/spec.md
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from ragfence.datasets import seed_acme_corp
+from ragfence.db.base import Base
 from ragfence.db.models import (
     Department,
     Document,
@@ -56,6 +57,21 @@ def _counts(session: Session) -> dict[str, int]:
         model.__tablename__: session.scalar(select(func.count()).select_from(model))
         for model in SEEDED_TABLES
     }
+
+
+@pytest.fixture(autouse=True)
+def _clean_schema(db_engine: Engine) -> None:
+    """Each seed test starts from an empty schema (isolation).
+
+    The session-scoped ``migrated_schema`` fixture only runs ``alembic upgrade
+    head`` (idempotent, keeps data), so without truncation a second run sees
+    rows left by earlier runs and the "clean seed" counts fail.
+    """
+
+    table_names = ", ".join(f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables))
+    with db_engine.connect() as conn:
+        conn.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
+        conn.commit()
 
 
 @pytest.mark.db

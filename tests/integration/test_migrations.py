@@ -243,7 +243,8 @@ def test_jsonb_metadata_spoofing_does_not_change_access_decision(db_engine: Engi
     with db_engine.connect() as conn:
         conn.execute(
             text(
-                "UPDATE document_chunks SET metadata = jsonb_build_object('tenant_id', :spoofed) "
+                "UPDATE document_chunks "
+                "SET metadata = jsonb_build_object('tenant_id', CAST(:spoofed AS text)) "
                 "WHERE document_id = :document_id"
             ),
             {"spoofed": str(tenant_b_id), "document_id": doc_id},
