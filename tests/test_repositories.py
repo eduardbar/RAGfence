@@ -12,7 +12,9 @@ those filters into every read statement.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
@@ -23,7 +25,13 @@ from ragfence.db.models import (
 from ragfence.db.models import (
     DocumentACL as DocumentACLModel,
 )
-from ragfence.db.repositories import BaseRepository, DocumentRepository, active_filters
+from ragfence.db.repositories import (
+    BaseRepository,
+    DocumentRepository,
+    UserRepository,
+    active_filters,
+    group_ids_for_user,
+)
 
 TENANT_A = "0c9f9f62-7a7d-4a8b-9f2e-6c1b3a0d2f01"
 TENANT_B = "5d3e4a21-8b2c-4f6d-9e1a-2c4b6d8e0f12"
@@ -130,3 +138,56 @@ def test_base_repository_exposes_shared_read_path() -> None:
     sql = _sql(stmt)
     assert "deleted_at IS NULL" in sql
     assert "tenant_id =" in sql
+
+
+def test_user_repository_get_active_by_email_scopes_to_tenant() -> None:
+    session = _FakeSession([object()])
+    repo = UserRepository(session, tenant_id=TENANT_A)
+    row = repo.get_active(email="ceo@acme-corp.example")
+    assert row is session._rows[0]
+    sql = _sql(session.statements[-1])
+    assert "users.email =" in sql
+    assert "users.tenant_id =" in sql
+
+
+def test_user_repository_get_active_by_id_scopes_to_tenant() -> None:
+    session = _FakeSession([object()])
+    repo = UserRepository(session, tenant_id=TENANT_A)
+    target = "11111111-2222-4333-8444-555555555555"
+    row = repo.get_active(user_id=target)
+    assert row is session._rows[0]
+    sql = _sql(session.statements[-1])
+    assert "users.id =" in sql
+    assert "users.tenant_id =" in sql
+
+
+def test_user_repository_get_active_unknown_email_returns_none() -> None:
+    session = _FakeSession([])
+    repo = UserRepository(session, tenant_id=TENANT_A)
+    assert repo.get_active(email="ghost@acme-corp.example") is None
+
+
+def test_user_repository_get_active_requires_exactly_one_lookup_key() -> None:
+    session = _FakeSession([])
+    repo = UserRepository(session, tenant_id=TENANT_A)
+    with pytest.raises(ValueError):
+        repo.get_active()
+    with pytest.raises(ValueError):
+        repo.get_active(user_id=TENANT_B, email="ghost@acme-corp.example")
+
+
+def test_group_ids_for_user_joins_user_groups_with_tenant_scope() -> None:
+    session = _FakeSession(
+        [
+            UUID("11111111-2222-4333-8444-555555555555"),
+            UUID("22222222-3333-4444-8555-666666666666"),
+        ]
+    )
+    target = "33333333-4444-4555-8666-777777777777"
+    group_ids = group_ids_for_user(session, tenant_id=TENANT_A, user_id=target)
+    assert group_ids == session._rows
+    sql = _sql(session.statements[-1])
+    assert "user_groups" in sql
+    assert "users" in sql  # tenant scope joins through the users table
+    assert "users.tenant_id =" in sql
+    assert "user_groups.user_id =" in sql

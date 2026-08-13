@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ragfence.core.enums import Classification
 from ragfence.core.models import AuthorizationContext
-from ragfence.db.models import Document
+from ragfence.db.models import Document, User, UserGroup
 
 
 def active_filters(
@@ -75,6 +75,46 @@ class DocumentRepository(BaseRepository[Document]):
     def count_active(self) -> int:
         stmt = select(func.count()).where(*active_filters(Document, tenant_id=self._tenant_id))
         return int(self._session.scalar(stmt) or 0)
+
+
+class UserRepository(BaseRepository[User]):
+    """User access: active rows for one tenant, never cross-tenant.
+
+    ``users`` has no ``deleted_at`` (BACKEND_SCHEMA §4), so ``active_filters``
+    contributes tenant scope only. ``is_active`` is deliberately NOT filtered
+    here — the identity provider inspects it to raise ``IdentityInactiveError``
+    (design: fail-closed typed errors), keeping absent and inactive rows
+    distinguishable.
+    """
+
+    model = User
+
+    def get_active(self, *, user_id: UUID | None = None, email: str | None = None) -> User | None:
+        """Return the tenant-scoped user row, or ``None`` when absent.
+
+        Exactly one of ``user_id`` or ``email`` is required; passing both or
+        neither is a caller bug and raises ``ValueError``.
+        """
+        if (user_id is None) == (email is None):
+            raise ValueError("get_active requires exactly one of user_id or email")
+        if user_id is not None:
+            return self._session.scalars(self._active_statement(User.id == user_id)).first()
+        return self._session.scalars(self._active_statement(User.email == email)).first()
+
+
+def group_ids_for_user(session: Session, tenant_id: UUID, user_id: UUID) -> list[UUID]:
+    """Group ids for a user from the ``user_groups`` join, tenant-scoped.
+
+    ``user_groups`` has no tenant column, so the scope comes from joining
+    through ``users`` (storage rule 3: reads never cross tenant boundaries).
+    """
+    stmt = (
+        select(UserGroup.group_id)
+        .join(User, User.id == UserGroup.user_id)
+        .where(UserGroup.user_id == user_id, User.tenant_id == tenant_id)
+        .order_by(UserGroup.group_id)
+    )
+    return list(session.scalars(stmt))
 
 
 def build_acl_predicate(acl: Any, ctx: AuthorizationContext) -> ColumnElement[bool]:
