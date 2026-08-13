@@ -1,0 +1,1 @@
+"""RAGAdapter contract and implementations."""

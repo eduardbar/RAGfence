@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ragfence"
+version = "0.1.0"
+description = "Security testing and authorization-aware retrieval for production RAG systems."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "RAGFence contributors" }]
+keywords = ["rag", "security", "evaluation", "acl", "pgvector"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "pydantic>=2.7,<3",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.2,<4",
+    "pgvector>=0.3,<1",
+    "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2,<10",
+    "pytest-cov>=5,<8",
+    "ruff>=0.6,<1",
+    "mypy>=1.10,<3",
+]
+
+[project.scripts]
+ragfence = "ragfence.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ragfence"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+# Planning artifacts (docs/openspec) contain illustrative code fences that are
+# not part of the package; ruff gates cover src/ and tests/ only.
+exclude = ["docs", "openspec", ".atl"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["ragfence"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
