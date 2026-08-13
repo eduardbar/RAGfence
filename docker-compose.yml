@@ -1,0 +1,23 @@
+# Local development services for RAGFence.
+# PostgreSQL 16 with pgvector for the authorization-aware reference implementation.
+# DSN: postgresql+psycopg://ragfence:ragfence@localhost:5432/ragfence
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ragfence-db
+    environment:
+      POSTGRES_USER: ragfence
+      POSTGRES_PASSWORD: ragfence
+      POSTGRES_DB: ragfence
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragfence -d ragfence"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ragfence_pgdata:/var/lib/postgresql/data
+
+volumes:
+  ragfence_pgdata:
