@@ -38,7 +38,12 @@ def test_scenario_outcome_member_values() -> None:
 
 
 def test_classification_rank_ordering() -> None:
-    ordered = [Classification.PUBLIC, Classification.INTERNAL, Classification.CONFIDENTIAL, Classification.RESTRICTED]
+    ordered = [
+        Classification.PUBLIC,
+        Classification.INTERNAL,
+        Classification.CONFIDENTIAL,
+        Classification.RESTRICTED,
+    ]
     assert [member.rank for member in ordered] == [0, 1, 2, 3]
 
 

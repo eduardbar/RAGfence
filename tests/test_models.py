@@ -7,7 +7,7 @@ Spec reference: openspec/changes/ragfence-foundation/specs/domain-models/spec.md
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -99,7 +99,9 @@ def test_document_policy_construction() -> None:
 
 
 def test_policy_decision_construction() -> None:
-    decision = PolicyDecision(allowed=False, reasons=["classification_escalation"], evaluated_at=datetime.now(timezone.utc))
+    decision = PolicyDecision(
+        allowed=False, reasons=["classification_escalation"], evaluated_at=datetime.now(UTC)
+    )
     assert decision.allowed is False
     assert decision.reasons == ["classification_escalation"]
 
@@ -127,7 +129,9 @@ def test_retrieved_chunk_construction() -> None:
 
 
 def test_citation_construction() -> None:
-    citation = Citation(document_id=_uuid(), document_title="CFO Memo", chunk_index=2, snippet="snippet")
+    citation = Citation(
+        document_id=_uuid(), document_title="CFO Memo", chunk_index=2, snippet="snippet"
+    )
     assert citation.document_title == "CFO Memo"
     assert citation.snippet == "snippet"
 
@@ -145,7 +149,13 @@ def test_attack_scenario_construction() -> None:
 
 
 def test_evaluation_case_construction() -> None:
-    case = EvaluationCase(id=_uuid(), scenario_id="cross-tenant-retrieval", prompt="p", actor=_ctx(), expected_allow=False)
+    case = EvaluationCase(
+        id=_uuid(),
+        scenario_id="cross-tenant-retrieval",
+        prompt="p",
+        actor=_ctx(),
+        expected_allow=False,
+    )
     assert case.expected_allow is False
     assert case.actor.classification is Classification.INTERNAL
 
@@ -164,7 +174,15 @@ def test_security_finding_construction() -> None:
 
 
 def test_evaluation_result_construction() -> None:
-    result = EvaluationResult(id=_uuid(), case_id=_uuid(), passed=True, findings=[], retrieved=[], answer="ok", latency_ms=12)
+    result = EvaluationResult(
+        id=_uuid(),
+        case_id=_uuid(),
+        passed=True,
+        findings=[],
+        retrieved=[],
+        answer="ok",
+        latency_ms=12,
+    )
     assert result.passed is True
     assert result.answer == "ok"
     assert result.latency_ms == 12
