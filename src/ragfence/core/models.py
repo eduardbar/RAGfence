@@ -88,7 +88,13 @@ class RetrievedChunk(BaseModel):
 
 
 class Citation(BaseModel):
-    """Reference to an allowed document in a generated answer (TRD §3.3)."""
+    """Reference to an allowed document in a generated answer (TRD §3.3).
+
+    ``source``/``checksum``/``score`` are provenance fields added for the
+    secure-retrieval path (Phase 5); they are optional so existing constructions
+    that only carry ``document_id``/``document_title``/``chunk_index``/``snippet``
+    remain valid.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -96,6 +102,9 @@ class Citation(BaseModel):
     document_title: str
     chunk_index: int
     snippet: str
+    source: str | None = None
+    checksum: str | None = None
+    score: float | None = None
 
 
 class AttackScenario(BaseModel):
