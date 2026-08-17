@@ -48,5 +48,36 @@ class InMemoryVectorStore:
         return [chunk for chunk, _embedding in ranked[:top_k]]
 
 
-# Static conformance: mypy rejects this assignment if the double diverges from the protocol.
+class CountingVectorStore:
+    """VectorStore double that records ``search`` calls (spec req 2).
+
+    Used to prove a DENY results in zero vector-store calls: ``search_calls``
+    increments on every ``search`` invocation and ``last_predicate`` captures the
+    SQL predicate passed down, so tests can assert the guard ran before any store
+    call (and, in PR 2, that the predicate is the ACL one).
+    """
+
+    def __init__(self) -> None:
+        self._chunks: dict[UUID, tuple[RetrievedChunk, list[float]]] = {}
+        self.search_calls: int = 0
+        self.last_predicate: SQL | None = None
+
+    def add(self, chunk: RetrievedChunk, embedding: list[float]) -> None:
+        self._chunks[chunk.chunk_id] = (chunk, embedding)
+
+    def search(
+        self, *, embedding: list[float], policy_predicate: SQL, top_k: int
+    ) -> list[RetrievedChunk]:
+        self.search_calls += 1
+        self.last_predicate = policy_predicate
+        ranked = sorted(
+            self._chunks.values(),
+            key=lambda item: _cosine_similarity(embedding, item[1]),
+            reverse=True,
+        )
+        return [chunk for chunk, _embedding in ranked[:top_k]]
+
+
+# Static conformance: mypy rejects these assignments if the doubles diverge from the protocol.
 _store: VectorStore = InMemoryVectorStore()
+_counting_store: VectorStore = CountingVectorStore()
