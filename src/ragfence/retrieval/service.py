@@ -1,4 +1,4 @@
-"""Secure retrieval service: authorization before retrieval (spec reqs 1-2, ADR-1/2).
+"""Secure retrieval service: authorization before retrieval (spec reqs 1-5, ADR-1/2/3).
 
 The service enforces the full guard — storage row-state rules 1-3 and the pure
 ``decide()`` rules 4-9 — before any vector-store call. A DENY returns a typed
@@ -6,8 +6,11 @@ The service enforces the full guard — storage row-state rules 1-3 and the pure
 calls, verifiable via a counting store double.
 
 The target document is resolved from ``filters["document_id"]`` on the request
-(``DOCUMENT_ID_FILTER``). PR 1 wires only the DENY path; the ALLOW branch (filtered
-store search + citations) is added in PR 2 and is not exercised here.
+(``DOCUMENT_ID_FILTER``). On ALLOW the service performs a corpus-wide filtered
+search: it embeds the query, builds the ACL predicate from typed columns only
+(``build_acl_predicate``, never the JSONB ``metadata`` column) and passes it as a
+single pre-filter statement to ``VectorStore.search``, then assembles citations.
+The predicate is the per-row authorization gate — there is no post-hoc filtering.
 """
 
 from __future__ import annotations
@@ -26,6 +29,8 @@ from ragfence.core.models import (
     RetrievalRequest,
     RetrievedChunk,
 )
+from ragfence.db.models import DocumentACL
+from ragfence.db.repositories import build_acl_predicate
 from ragfence.policies.decision import decide
 from ragfence.policies.guard import (
     REASON_CROSS_TENANT,
@@ -34,6 +39,8 @@ from ragfence.policies.guard import (
     REASON_DOCUMENT_NOT_READY,
     RowLoader,
 )
+from ragfence.providers.fakes import FakeEmbeddingProvider
+from ragfence.retrieval.citations import DocumentMetaLoader, build_citations
 from ragfence.retrieval.result import RetrievalDecision, SecureRetrievalResult
 from ragfence.retrieval.trace import RetrievalTrace
 
@@ -45,6 +52,7 @@ DOCUMENT_ID_FILTER = "document_id"
 
 RowPolicyLoader = Callable[[UUID], DocumentPolicy]
 DecideFn = Callable[[DocumentPolicy, AuthorizationContext], PolicyDecision]
+EmbedFn = Callable[[str], list[float]]
 
 
 class RetrievalService:
@@ -57,11 +65,17 @@ class RetrievalService:
         load_row: RowLoader,
         policy: RowPolicyLoader,
         decide_fn: DecideFn = decide,
+        embed: EmbedFn | None = None,
+        document_meta: DocumentMetaLoader | None = None,
     ) -> None:
         self._store = store
         self._load_row = load_row
         self._policy = policy
         self._decide_fn = decide_fn
+        # Deterministic zero-I/O embedding default (TRD §8); inject to override.
+        _embedder = FakeEmbeddingProvider()
+        self._embed = embed or (lambda text: _embedder.embed([text])[0])
+        self._document_meta = document_meta or (lambda _did: None)
         self._store_calls = 0
 
     def retrieve(self, request: RetrievalRequest) -> SecureRetrievalResult:
@@ -75,10 +89,17 @@ class RetrievalService:
         chunks: list[RetrievedChunk] = []
         citations: list[Citation] = []
         if allowed:
-            # PR 2: filtered store search (build_acl_predicate + top_k) and
-            # citation assembly are wired here. Each store.search call increments
-            # self._store_calls; the ALLOW branch is not implemented in PR 1.
-            pass
+            # Corpus-wide filtered search: one pre-filter statement built from typed
+            # ACL columns only (never JSONB metadata); the predicate is the gate.
+            predicate = build_acl_predicate(DocumentACL, request.authorization)
+            embedding = self._embed(request.query)
+            chunks = self._store.search(
+                embedding=embedding,
+                policy_predicate=predicate,
+                top_k=request.top_k,
+            )
+            self._store_calls += 1
+            citations = build_citations(chunks, self._document_meta)
 
         latency_ms = max(0, int((datetime.now(UTC) - started).total_seconds() * 1000))
         trace = RetrievalTrace(
