@@ -28,10 +28,12 @@
 
 ## Verification
 
-- `RAGFENCE_TEST_DATABASE_DSN=...localhost:5434/ragfence uv run pytest -q`: **407 passed, 0 skipped**.
+- `RAGFENCE_TEST_DATABASE_DSN=...localhost:5434/ragfence uv run pytest -q`: **408 passed, 0 skipped**.
 - Release/readiness focused tests: **16 passed**.
 - `ruff check` on release-readiness code/tests: **passed**.
 - `ruff format --check` on release-readiness code/tests: **passed**.
 - `mypy src/ragfence/release_readiness`: **Success: no issues found in 4 source files**.
-- `release_ready: false`, `blocked_non_local`: no public GitHub run receipt exists because no push/PR was performed.
-- No commit, push, public CI lookup, or deployment was performed.
+- `release_ready: true` after satisfying the public CI receipt gate.
+- Public CI receipt obtained after publication: `https://github.com/eduardbar/RAGfence/actions/runs/32182933269`, commit `c3798eae2d70590374d9492cffab563281941cfa`, workflow `CI`, conclusion `success`.
+- Release checklist now returns `release_ready: true` with the public receipt.
+- Deployment was not performed.

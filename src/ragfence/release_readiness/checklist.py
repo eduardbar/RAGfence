@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,33 @@ def _workflow_check(root: Path) -> dict[str, Any]:
     }
 
 
-def validate(root: Path) -> dict[str, Any]:
+def _public_ci_check(receipt: dict[str, str] | None) -> dict[str, Any]:
+    if receipt is None:
+        return {
+            "status": "blocked_non_local",
+            "reason": (
+                "No public GitHub run receipt was supplied; local checks cannot substitute for it."
+            ),
+            "local_verdict_substitution": False,
+        }
+    url = receipt.get("url", "")
+    sha = receipt.get("sha", "")
+    conclusion = receipt.get("conclusion", "")
+    valid = (
+        url.startswith("https://github.com/")
+        and bool(re.fullmatch(r"[0-9a-f]{40}", sha))
+        and conclusion == "success"
+    )
+    return {
+        "status": "pass" if valid else "blocked_non_local",
+        "url": url,
+        "sha": sha,
+        "conclusion": conclusion,
+        "local_verdict_substitution": False,
+    }
+
+
+def validate(root: Path, *, public_ci_receipt: dict[str, str] | None = None) -> dict[str, Any]:
     benchmark = run_acme_benchmark()
     audit = scan_repository(root)
     checks = {
@@ -46,13 +73,7 @@ def validate(root: Path) -> dict[str, Any]:
             "status": "pass" if not audit["findings"] else "fail",
             "dependency": audit["dependency_audit"],
         },
-        "public_ci_receipt": {
-            "status": "blocked_non_local",
-            "reason": (
-                "No public GitHub run receipt was supplied; local checks cannot substitute for it."
-            ),
-            "local_verdict_substitution": False,
-        },
+        "public_ci_receipt": _public_ci_check(public_ci_receipt),
     }
     release_ready = all(item["status"] == "pass" for item in checks.values())
     return {"release_ready": release_ready, "checks": checks}

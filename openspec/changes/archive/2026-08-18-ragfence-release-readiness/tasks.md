@@ -42,7 +42,7 @@ All apply work follows RED → GREEN → REFACTOR. This artifact-only phase crea
 
 - [x] 7.1 RED: add offline YAML structure/security tests for both workflows, ordered quality/evaluation steps, fake-provider defaults, artifacts/summary/final gate, and no-secret logging; verify they catch removed/misordered gates.
 - [x] 7.2 GREEN: make only release-contract corrections required to preserve baseline CI and reusable evaluation workflow behavior; do not add live GitHub calls to tests.
-- [ ] 7.3 REFACTOR: run offline workflow tests locally, then inspect the public `main` run for the release commit and record URL, SHA, check names, and green status; never infer this receipt from local output.
+- [x] 7.3 REFACTOR: run offline workflow tests locally, then inspect the public `main` run for the release commit and record URL, SHA, check names, and green status; never infer this receipt from local output.
 
 ## 8. Dependency and secret audit
 
@@ -53,6 +53,6 @@ All apply work follows RED → GREEN → REFACTOR. This artifact-only phase crea
 ## 9. Final verification and handoff
 
 - [x] 9.1 RED: assemble a release checklist command that fails when any matrix item lacks evidence, including Docker skips or missing public-CI receipt.
-- [ ] 9.2 GREEN: satisfy all applicable offline, wheel, Docker, benchmark, audit, and public-CI evidence gates with exact command output.
+- [x] 9.2 GREEN: satisfy all applicable offline, wheel, Docker, benchmark, audit, and public-CI evidence gates with exact command output.
 - [x] 9.3 REFACTOR: run the complete release verification, classify intentional skips/blockers, and ensure evidence is reproducible and secret-free.
-- [ ] 9.4 Review: verify this artifact phase changed exactly the four files under `openspec/changes/ragfence-release-readiness/`; leave implementation, commits, pushes, publication, and deploys to later phases.
+- [x] 9.4 Review: verify this artifact phase changed exactly the four files under `openspec/changes/ragfence-release-readiness/`; leave implementation, commits, pushes, publication, and deploys to later phases.

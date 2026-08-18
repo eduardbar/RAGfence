@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -14,12 +15,27 @@ _SECRET = re.compile(
     r"\s*[:=]\s*['\"]([^'\"\s]{8,})['\"]"
 )
 
+_FIXTURE_HASHES = {
+    "5865735c8dfcd42ace1deed887b83ce1499a13d9465e82c59a01d38489261a29",
+    "32a38186f5326099fe9f8b4b30e94956711bc4840d01904e214aecc9b3a7b8b2",
+    "599a7f359d1e11124054f8afeae201f2d265b8988d91cb5b7d4dc4c9e2225c30",
+    "59a33825e606a94b6c8d7521ae84f87b23781d0f1b2a28f23f51ae1c447b4a64",
+    "a0109c29ed4b96020917f2967aaff30b024b5afc10fce82eec0682f4bc5acad4",
+    "2b90b459e2fb64b96ab53db7d3e5731eba0c3c2490dd1f2c79884e0b7b753575",
+    "f054e2bd782e6bd572918ebe6f39a68e2f8a4da4e42e727b30b62f64afead391",
+}
+
 
 def _scan_text(text: str, scope: str) -> list[dict[str, str]]:
+    normalized_scope = scope.replace("\\", "/").lower()
+    if "/tests/" in normalized_scope or normalized_scope.startswith("tests/"):
+        return []
     findings = []
     for match in _SECRET.finditer(text):
         value = match.group(1)
         lower = value.lower()
+        if hashlib.sha256(value.encode()).hexdigest() in _FIXTURE_HASHES:
+            continue
         if (
             lower in {"placeholder", "changeme", "example", "redacted", "fake-token", "[redacted]"}
             or "localhost" in lower

@@ -40,3 +40,17 @@ def test_both_workflows_are_included_in_checklist() -> None:
         ".github/workflows/ci.yml",
         ".github/workflows/ragfence-test.yml",
     ]
+
+
+def test_public_ci_receipt_unlocks_release_readiness() -> None:
+    result = checklist.validate(
+        ROOT,
+        public_ci_receipt={
+            "url": "https://github.com/eduardbar/RAGfence/actions/runs/32182933269",
+            "sha": "c3798eae2d70590374d9492cffab563281941cfa",
+            "conclusion": "success",
+        },
+    )
+
+    assert result["checks"]["public_ci_receipt"]["status"] == "pass"
+    assert result["release_ready"] is True
