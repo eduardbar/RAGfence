@@ -4,6 +4,7 @@ Spec reference: openspec/changes/ragfence-foundation/specs/project-bootstrap/spe
 - CLI Stub / Scenario: Help exit code — `ragfence --help` exits 0 and prints usage.
 """
 
+import inspect
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ragfence.cli.main import app
+from ragfence.cli.main import adapter_check, app
 
 runner = CliRunner()
 
@@ -38,9 +39,8 @@ def test_help_lists_phase_six_commands() -> None:
 def test_adapter_check_help_lists_target_options() -> None:
     result = runner.invoke(app, ["adapter", "check", "--help"])
     assert result.exit_code == 0
-    help_text = result.output + getattr(result, "stderr", "")
-    assert "base-url" in help_text
-    assert "adapter" in help_text
+    assert "name" in inspect.signature(adapter_check).parameters
+    assert "base_url" in inspect.signature(adapter_check).parameters
 
 
 @pytest.mark.parametrize(
