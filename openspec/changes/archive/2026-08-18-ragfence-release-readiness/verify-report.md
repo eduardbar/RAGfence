@@ -38,8 +38,8 @@ build_output_hash: sha256:d24ae073ab879d81355a666b97aed31f49ecf0ea8a63aba44494f4
 - Offline CI workflow checks: ✅
 - Public GitHub CI receipt: ✅
   - Workflow: `CI`
-  - URL: https://github.com/eduardbar/RAGfence/actions/runs/32182933269
-  - Commit: `c3798eae2d70590374d9492cffab563281941cfa`
+  - URL: https://github.com/eduardbar/RAGfence/actions/runs/32184780731
+  - Commit: `90331b56f3b93d4bda371deeacdfa8aa312087eb`
   - Conclusion: `success`
 - Dependency audit: ✅ `uv audit` clean
 - Secret audit: ✅ 0 findings, 0 secret values exposed

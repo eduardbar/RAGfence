@@ -34,6 +34,6 @@
 - `ruff format --check` on release-readiness code/tests: **passed**.
 - `mypy src/ragfence/release_readiness`: **Success: no issues found in 4 source files**.
 - `release_ready: true` after satisfying the public CI receipt gate.
-- Public CI receipt obtained after publication: `https://github.com/eduardbar/RAGfence/actions/runs/32182933269`, commit `c3798eae2d70590374d9492cffab563281941cfa`, workflow `CI`, conclusion `success`.
+- Public CI receipt obtained after publication: `https://github.com/eduardbar/RAGfence/actions/runs/32184780731`, commit `90331b56f3b93d4bda371deeacdfa8aa312087eb`, workflow `CI`, conclusion `success`.
 - Release checklist now returns `release_ready: true` with the public receipt.
 - Deployment was not performed.
