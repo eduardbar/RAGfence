@@ -1,0 +1,253 @@
+name: RAGFence test
+
+on:
+  workflow_call:
+    inputs:
+      adapter:
+        description: Adapter passed to ragfence test
+        type: string
+        required: false
+        default: generic_http
+      target:
+        description: Target service name
+        type: string
+        required: false
+        default: target
+      base-url:
+        description: Target base URL
+        type: string
+        required: false
+        default: http://127.0.0.1:8000
+      threshold:
+        description: Inclusive score threshold from 0 to 100
+        type: number
+        required: false
+        default: 80
+      start-target-command:
+        description: Quoted command used to start the target service
+        type: string
+        required: false
+        default: docker compose up -d target
+      comment:
+        description: Enable the trusted same-repository PR comment path
+        type: boolean
+        required: false
+        default: true
+      fake-providers:
+        description: Use deterministic local fake providers
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ragfence-test:
+    name: RAGFence evaluation (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    env:
+      REPORT_PATH: .ragfence/reports/ci.json
+      ARTIFACT_NAME: ragfence-report-${{ matrix.python-version }}
+      ADAPTER: ${{ inputs.adapter }}
+      TARGET: ${{ inputs.target }}
+      BASE_URL: ${{ inputs.base-url }}
+      THRESHOLD: ${{ inputs.threshold }}
+      START_TARGET_COMMAND: ${{ inputs.start-target-command }}
+      FAKE_PROVIDERS: ${{ inputs.fake-providers }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Validate inputs
+        env:
+          INPUT_ADAPTER: ${{ inputs.adapter }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_BASE_URL: ${{ inputs.base-url }}
+          INPUT_THRESHOLD: ${{ inputs.threshold }}
+          INPUT_START_COMMAND: ${{ inputs.start-target-command }}
+        run: |
+          python - <<'PY'
+          import math
+          import os
+          from urllib.parse import urlparse
+
+          adapter = os.environ["INPUT_ADAPTER"].strip()
+          target = os.environ["INPUT_TARGET"].strip()
+          base_url = os.environ["INPUT_BASE_URL"].strip()
+          start_command = os.environ["INPUT_START_COMMAND"].strip()
+          try:
+              threshold = float(os.environ["INPUT_THRESHOLD"])
+          except ValueError as error:
+              raise SystemExit("Invalid threshold configuration.") from error
+          parsed = urlparse(base_url)
+          if not adapter or not target or not start_command or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+              raise SystemExit("Invalid RAGFence CI input configuration.")
+          if not math.isfinite(threshold) or not 0 <= threshold <= 100:
+              raise SystemExit("threshold must satisfy 0 <= threshold <= 100")
+          PY
+
+      - name: Initialize RAGFence
+        run: ragfence init --up
+
+      - name: Start target
+        run: |
+          mkdir -p .ragfence/reports
+          bash -c -- "$START_TARGET_COMMAND" >.ragfence/target-start.log 2>&1 &
+          printf '%s\n' "$!" > .ragfence/target.pid
+
+      - name: Wait for target readiness
+        env:
+          READINESS_ATTEMPTS: 30
+          READINESS_DELAY_SECONDS: 2
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          url = os.environ["BASE_URL"]
+          attempts = int(os.environ["READINESS_ATTEMPTS"])
+          delay = int(os.environ["READINESS_DELAY_SECONDS"])
+          for attempt in range(attempts):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status < 500:
+                          raise SystemExit(0)
+              except (OSError, urllib.error.URLError):
+                  pass
+              if attempt + 1 < attempts:
+                  time.sleep(delay)
+          print("Target readiness check failed after bounded retries.", file=sys.stderr)
+          raise SystemExit(2)
+          PY
+
+      - name: Evaluate target
+        id: evaluate
+        continue-on-error: true
+        run: |
+          mkdir -p "$(dirname "$REPORT_PATH")"
+          set +e
+          if [ "$FAKE_PROVIDERS" = "true" ]; then
+            export RAGFENCE_LLM_PROVIDER=fake
+            export RAGFENCE_EMBEDDING_PROVIDER=fake
+          fi
+          ragfence test --adapter "$ADAPTER" --base-url "$BASE_URL" --threshold "$THRESHOLD" --json --output "$REPORT_PATH"
+          cli_status=$?
+          set -e
+          case "$cli_status" in
+            0|1|2) ;;
+            *) cli_status=2 ;;
+          esac
+          if [ -s "$REPORT_PATH" ]; then report_exists=true; else report_exists=false; fi
+          {
+            printf 'status=%s\n' "$cli_status"
+            printf 'report_exists=%s\n' "$report_exists"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.REPORT_PATH }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        env:
+          CLI_STATUS: ${{ steps.evaluate.outputs.status || '2' }}
+          REPORT_EXISTS: ${{ steps.evaluate.outputs.report_exists || 'false' }}
+        run: |
+          : "${GITHUB_STEP_SUMMARY:?summary file is required}"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["REPORT_PATH"])
+          status = int(os.environ["CLI_STATUS"])
+          exists = os.environ["REPORT_EXISTS"] == "true" and path.is_file()
+          score = "unavailable"
+          outcome = "execution/configuration error"
+          passed = "false"
+          if exists:
+              try:
+                  report = json.loads(path.read_text(encoding="utf-8"))
+                  score_value = report.get("score")
+                  if isinstance(score_value, (int, float)):
+                      score = str(score_value)[:32]
+                  outcome_value = report.get("outcome")
+                  if isinstance(outcome_value, str):
+                      outcome = outcome_value[:80]
+                  passed_value = report.get("passed_threshold")
+                  if isinstance(passed_value, bool):
+                      passed = str(passed_value).lower()
+              except (OSError, ValueError, TypeError):
+                  outcome = "execution/configuration error"
+          if status == 1 and outcome == "execution/configuration error":
+              outcome = "below threshold"
+          summary = [
+              "## RAGFence evaluation",
+              "",
+              f"- Score: `{score}`",
+              f"- Threshold: `{os.environ['THRESHOLD'][:32]}`",
+              f"- Outcome: `{outcome}`",
+              f"- Passed threshold: `{passed}`",
+              f"- CLI exit status: `{status}`",
+              f"- Report: `{os.environ['REPORT_PATH']}`",
+              f"- Artifact: `{os.environ['ARTIFACT_NAME']}`",
+          ]
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as handle:
+              handle.write("\n".join(summary) + "\n")
+          PY
+
+      - name: Comment on trusted same-repository PR
+        if: ${{ inputs.comment && github.event_name == 'pull_request' && github.event_name != 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository }}
+        uses: actions/github-script@v7
+        env:
+          CLI_STATUS: ${{ steps.evaluate.outputs.status || '2' }}
+          REPORT_PATH: ${{ env.REPORT_PATH }}
+        with:
+          script: |
+            const marker = '<!-- ragfence-ci-summary -->';
+            const body = `${marker}\n## RAGFence evaluation\n- CLI exit status: ${process.env.CLI_STATUS}\n- Report artifact: ${process.env.REPORT_PATH}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Final gate
+        if: always()
+        env:
+          CLI_STATUS: ${{ steps.evaluate.outputs.status || '2' }}
+          REPORT_EXISTS: ${{ steps.evaluate.outputs.report_exists || 'false' }}
+        run: |
+          status="$CLI_STATUS"
+          if [ "$REPORT_EXISTS" != "true" ]; then status=2; fi
+          case "$status" in
+            0|1|2) exit "$status" ;;
+            *) exit 2 ;;
+          esac

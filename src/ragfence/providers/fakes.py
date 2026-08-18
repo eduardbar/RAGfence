@@ -10,22 +10,24 @@ import random
 from typing import TYPE_CHECKING
 
 from ragfence.core.models import LLMResponse, Message
+from ragfence.providers.tokens import estimate_prompt_tokens, estimate_tokens
 
 if TYPE_CHECKING:
     from ragfence.core.protocols import EmbeddingProvider, LLMProvider
 
 
 class FakeLLMProvider:
-    """Echoes the joined message content verbatim."""
+    """Echoes joined message content using the shared deterministic estimator."""
 
     name = "fake"
 
     def complete(self, *, messages: list[Message], temperature: float) -> LLMResponse:
+        del temperature
         content = "\n".join(message.content for message in messages)
         return LLMResponse(
             content=content,
-            prompt_tokens=sum(len(message.content) for message in messages),
-            completion_tokens=len(content),
+            prompt_tokens=estimate_prompt_tokens([message.content for message in messages]),
+            completion_tokens=estimate_tokens(content),
         )
 
 

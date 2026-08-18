@@ -1,0 +1,50 @@
+# openspec/config.yaml — RAGFence SDD bootstrap
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12+ (local 3.14.5), src/ layout (src/ragfence/), pyproject.toml (not yet created)
+  Architecture: cli/core/auth/policies/retrieval/evaluation/attacks/adapters/providers/observability
+  Stack per TRD: FastAPI, Pydantic v2, SQLAlchemy 2.x + Alembic, PostgreSQL + pgvector, Typer CLI
+  Security model: deny-by-default ACL policy engine, authorization BEFORE retrieval, server-derived context
+  Testing: pytest (designated); .venv + pip tooling, NO uv, no API keys required
+  Style: Ruff (lint + format), mypy; docs in docs/ (PRD, TRD, APP_FLOW, UI_UX_DESIGN_BRIEF, BACKEND_SCHEMA, IMPLEMENTATION_PLAN)
+
+strict_tdd: true
+
+testing:
+  runner: pytest
+  test_command: python -m pytest
+  test_layers:
+    unit: pytest
+    integration: httpx / FastAPI TestClient
+    e2e: none
+  coverage_tool: pytest-cov
+  coverage_command: python -m pytest --cov=ragfence
+  quality:
+    linter: ruff check
+    type_checker: mypy
+    formatter: ruff format
+
+rules:
+  proposal:
+    - Reference docs/PRD.md and docs/TRD.md; scope must fit the 400-line review budget
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Authorization enforcement MUST precede retrieval (deny-by-default)
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow the src/ragfence layout and docs/ conventions
+    tdd: true
+    test_command: python -m pytest
+  verify:
+    test_command: python -m pytest
+    build_command: python -m build
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

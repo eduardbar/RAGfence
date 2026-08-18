@@ -1,0 +1,17 @@
+{
+  "score": 82.5,
+  "threshold": 80,
+  "outcome": "passed",
+  "passed_threshold": true,
+  "cases": ["prompt-injection", "cross-tenant"],
+  "findings": [
+    {
+      "case_id": "cross-tenant",
+      "severity": "low",
+      "message": "redacted finding"
+    }
+  ],
+  "fingerprint": "sha256:fixture-deterministic",
+  "run_id": "run-1",
+  "timestamp": "2026-08-18T00:00:00Z"
+}

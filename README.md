@@ -3,21 +3,18 @@
 Security testing and authorization-aware retrieval for production RAG systems.
 
 RAGFence is a Python library and CLI that helps teams build and verify RAG
-pipelines that never leak. It ships an authorization-aware reference
-implementation (PostgreSQL + pgvector, deny-by-default ACL policies, authorization
-before retrieval) and an adversarial evaluation harness that runs attack scenarios
-against any target — the reference implementation or an external RAG system via a
-thin adapter.
+pipelines that never leak. It provides authorization-aware retrieval primitives,
+a deterministic evaluation engine, and the `generic_http` adapter for testing an
+external RAG target.
 
-> **Status: foundation bootstrap.** This slice ships the installable package
-> skeleton, tooling gates (Ruff, mypy, pytest), the `ragfence` CLI stub, local
-> services definition, and release basics. Core domain models, the policy engine,
-> and the storage schema land in the next delivery slices.
+> **Status: v0.1 release candidate.** The evaluation and adapter contracts are
+> implemented and covered by offline tests. The reference database path is an
+> optional Docker-backed check; this repository does not claim a public CI run.
 
-## Quickstart (development)
+## Quickstart (offline)
 
-Requires Python >= 3.12. No external services or API keys are needed for the test
-suite.
+Requires Python >= 3.12. The offline quickstart needs no Docker, PostgreSQL,
+network access, API keys, or other external services.
 
 ```console
 python -m venv .venv
@@ -25,37 +22,59 @@ python -m venv .venv
 # source .venv/bin/activate && pip install -e ".[dev]"   # POSIX
 ```
 
-Run the quality gates:
+Check the installed CLI, initialize a local project, and run the deterministic
+reference evaluation:
 
 ```console
-python -m pytest          # tests
-ruff check .              # lint
-ruff format --check .     # formatting
-mypy                      # strict type checking
+ragfence --help
+ragfence init
+ragfence test
 ```
 
-Optional — start the local PostgreSQL 16 + pgvector instance used by the
-reference implementation:
+The human-readable report is written to `.ragfence/reports/latest.txt` and the
+machine-readable report is written with:
+
+```console
+ragfence test --json
+```
+
+which writes `.ragfence/reports/latest.json`. Exit codes are:
+
+- **0 =** completed evaluation meets the configured threshold.
+- **1 =** completed evaluation is below the threshold.
+- **2 =** configuration, usage, reachability, or runtime failure.
+
+Run the repository quality gates without Docker or other external services:
+
+```console
+python -m pytest
+ruff check .
+ruff format --check .
+mypy
+```
+
+### Optional Docker database checks
+
+Docker Compose is optional and only needed for database-backed reference checks.
+It starts PostgreSQL 16 with pgvector; it is not required by the offline tests
+or the generic HTTP adapter tests:
 
 ```console
 docker compose up -d
 ```
 
-The CLI is a stub at this stage; `ragfence --help` prints usage:
-
-```console
-ragfence --help
-```
+Safe starting points for configuration are [`examples/reference.toml`](examples/reference.toml)
+and [`examples/generic_http.toml`](examples/generic_http.toml). The latter uses
+`CHANGEME` and `localhost` placeholders only.
 
 ## Documentation
 
-| Doc | Contents |
-|-----|----------|
-| `docs/PRD.md` | Product requirements |
-| `docs/TRD.md` | Technical requirements and architecture |
-| `docs/BACKEND_SCHEMA.md` | Database schema reference |
-| `docs/IMPLEMENTATION_PLAN.md` | Phased delivery plan |
-| `CONTRIBUTING.md` | Contribution guidelines |
+See the [documentation index](docs/README.md) for the product, technical,
+application-flow, schema, implementation-plan, and UI/UX documents.
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 

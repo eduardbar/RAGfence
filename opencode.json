@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4-flash",
+  "agent": {
+    "gentle-orchestrator": { "model": "opencode-go/deepseek-v4-flash" },
+    "general": { "model": "opencode-go/deepseek-v4-flash" },
+    "explore": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-init": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-explore": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-propose": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-spec": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-design": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-tasks": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-apply": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-verify": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-archive": { "model": "opencode-go/deepseek-v4-flash" },
+    "sdd-onboard": { "model": "opencode-go/deepseek-v4-flash" },
+    "review-risk": { "model": "opencode-go/deepseek-v4-flash" },
+    "review-readability": { "model": "opencode-go/deepseek-v4-flash" },
+    "review-reliability": { "model": "opencode-go/deepseek-v4-flash" },
+    "review-resilience": { "model": "opencode-go/deepseek-v4-flash" },
+    "review-refuter": { "model": "opencode-go/deepseek-v4-flash" },
+    "jd-fix-agent": { "model": "opencode-go/deepseek-v4-flash" },
+    "jd-judge-a": { "model": "opencode-go/deepseek-v4-flash" },
+    "jd-judge-b": { "model": "opencode-go/deepseek-v4-flash" }
+  }
+}

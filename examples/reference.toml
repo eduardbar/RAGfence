@@ -1,0 +1,17 @@
+# Offline-safe reference configuration example.
+# Replace CHANGEME only in a local, untracked copy.
+adapter = "reference"
+threshold = 0.8
+
+[database]
+dsn = "postgresql+psycopg://ragfence:CHANGEME@localhost:5432/ragfence"
+
+[embeddings]
+provider = "fake"
+dimension = 1536
+
+[llm]
+provider = "fake"
+
+[evaluation]
+suite = "default"

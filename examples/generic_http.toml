@@ -1,0 +1,15 @@
+# Local generic HTTP adapter example. No network or credentials are required
+# to validate this file; CHANGEME is a placeholder for local testing only.
+adapter = "generic_http"
+threshold = 0.8
+
+[adapters.generic_http]
+base_url = "http://localhost:8000"
+retrieve_path = "retrieve"
+answer_path = "chat"
+health_path = "health"
+timeout_seconds = 5.0
+health_retries = 2
+health_backoff_seconds = 0.25
+auth_header = "Authorization"
+auth_token = "CHANGEME"

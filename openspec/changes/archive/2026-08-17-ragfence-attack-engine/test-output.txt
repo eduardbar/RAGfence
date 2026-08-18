@@ -1,0 +1,20 @@
+ssssssssssssss.......................................................... [ 33%]
+........................................................................ [ 66%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] tests\integration\test_auth_db.py:49: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_auth_db.py:76: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_auth_db.py:93: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_datasets_seed.py:77: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_datasets_seed.py:86: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_datasets_seed.py:98: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:70: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:85: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:106: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:123: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:149: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_migrations.py:180: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_retrieval_db.py:174: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+SKIPPED [1] tests\integration\test_retrieval_db.py:246: PostgreSQL unavailable; set RAGFENCE_TEST_DATABASE_DSN
+203 passed, 14 skipped in 6.03s
