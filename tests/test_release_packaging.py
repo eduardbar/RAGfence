@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import venv
 import zipfile
 from pathlib import Path
@@ -21,7 +22,19 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path: Path) -> None:
     """Build a wheel, install it non-editably, and exercise import plus help."""
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
-    built = _run(["uv", "build", "--wheel", "--out-dir", str(wheelhouse)], cwd=ROOT)
+    built = _run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            ".",
+            "--no-deps",
+            "--wheel-dir",
+            str(wheelhouse),
+        ],
+        cwd=ROOT,
+    )
     assert built.returncode == 0, built.stdout + built.stderr
     wheels = sorted(wheelhouse.glob("ragfence-*.whl"))
     assert len(wheels) == 1

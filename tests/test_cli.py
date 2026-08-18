@@ -38,8 +38,9 @@ def test_help_lists_phase_six_commands() -> None:
 def test_adapter_check_help_lists_target_options() -> None:
     result = runner.invoke(app, ["adapter", "check", "--help"])
     assert result.exit_code == 0
-    assert "base-url" in result.output
-    assert "adapter" in result.output
+    help_text = result.output + getattr(result, "stderr", "")
+    assert "base-url" in help_text
+    assert "adapter" in help_text
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import zipfile
 from pathlib import Path
@@ -33,6 +34,8 @@ def _scan_text(text: str, scope: str) -> list[dict[str, str]]:
 
 def _dependency_audit(root: Path) -> dict[str, str]:
     """Use uv audit if this uv supports it, otherwise state the limitation."""
+    if shutil.which("uv") is None:
+        return {"status": "unavailable", "tool": "uv audit", "reason": "uv not installed"}
     probe = subprocess.run(
         ["uv", "audit", "--help"], cwd=root, capture_output=True, text=True, check=False
     )
