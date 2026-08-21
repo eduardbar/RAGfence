@@ -23,12 +23,15 @@ _FIXTURE_HASHES = {
     "a0109c29ed4b96020917f2967aaff30b024b5afc10fce82eec0682f4bc5acad4",
     "2b90b459e2fb64b96ab53db7d3e5731eba0c3c2490dd1f2c79884e0b7b753575",
     "f054e2bd782e6bd572918ebe6f39a68e2f8a4da4e42e727b30b62f64afead391",
+    # tests/test_identity_secrets_hygiene.py MARKER_TOKEN (deliberate fake fixture)
+    "16c1cfa31e95f0e8f3759723bb0ba717141fc7ed38694ff999fd7b8a9f006542",
 }
 
 
 def _scan_text(text: str, scope: str) -> list[dict[str, str]]:
     normalized_scope = scope.replace("\\", "/").lower()
-    if "/tests/" in normalized_scope or normalized_scope.startswith("tests/"):
+    path_scope = normalized_scope.split(":", 1)[-1]
+    if "/tests/" in f"/{path_scope}" or path_scope.startswith("tests/"):
         return []
     findings = []
     for match in _SECRET.finditer(text):

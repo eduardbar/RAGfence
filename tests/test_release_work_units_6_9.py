@@ -54,3 +54,16 @@ def test_public_ci_receipt_unlocks_release_readiness() -> None:
 
     assert result["checks"]["public_ci_receipt"]["status"] == "pass"
     assert result["release_ready"] is True
+
+
+def test_audit_exempts_test_files_and_known_fixture_tokens() -> None:
+    """Los fixtures deliberados de tests no son secretos: ni tracked ni history."""
+    from ragfence.release_readiness.audit import _scan_text
+
+    marker = 'MARKER_TOKEN = "supersecret-marker-token-7f3a"'
+
+    # Un archivo bajo tests/ está exento aunque el scope lleve prefijo tracked:
+    assert _scan_text(marker, r"tracked:tests\test_x.py") == []
+
+    # El token fixture conocido en texto de historia tampoco es finding.
+    assert _scan_text(marker, "history") == []
