@@ -98,6 +98,9 @@ class _HealthyAdapter:
     def answer(self, request, chunks):
         return self.answer_text
 
+    def check_identity_represented(self) -> bool:
+        return True
+
 
 class _UnhealthyAdapter(_HealthyAdapter):
     def is_healthy(self) -> bool:

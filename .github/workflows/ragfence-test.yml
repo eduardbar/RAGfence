@@ -7,7 +7,7 @@ on:
         description: Adapter passed to ragfence test
         type: string
         required: false
-        default: generic_http
+        default: reference
       target:
         description: Target service name
         type: string
@@ -17,7 +17,7 @@ on:
         description: Target base URL
         type: string
         required: false
-        default: http://127.0.0.1:8000
+        default: ""
       threshold:
         description: Inclusive score threshold from 0 to 100
         type: number
@@ -27,7 +27,7 @@ on:
         description: Quoted command used to start the target service
         type: string
         required: false
-        default: docker compose up -d target
+        default: ""
       comment:
         description: Enable the trusted same-repository PR comment path
         type: boolean
@@ -50,6 +50,20 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ragfence
+          POSTGRES_PASSWORD: ragfence
+          POSTGRES_DB: ragfence
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U ragfence -d ragfence"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       REPORT_PATH: .ragfence/reports/ci.json
       ARTIFACT_NAME: ragfence-report-${{ matrix.python-version }}
@@ -59,6 +73,7 @@ jobs:
       THRESHOLD: ${{ inputs.threshold }}
       START_TARGET_COMMAND: ${{ inputs.start-target-command }}
       FAKE_PROVIDERS: ${{ inputs.fake-providers }}
+      RAGFENCE_TEST_DATABASE_DSN: postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,23 +109,34 @@ jobs:
               threshold = float(os.environ["INPUT_THRESHOLD"])
           except ValueError as error:
               raise SystemExit("Invalid threshold configuration.") from error
-          parsed = urlparse(base_url)
-          if not adapter or not target or not start_command or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+          if not adapter or not target:
               raise SystemExit("Invalid RAGFence CI input configuration.")
+          if adapter == "generic_http":
+              parsed = urlparse(base_url)
+              if not start_command or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                  raise SystemExit("Invalid RAGFence CI input configuration.")
           if not math.isfinite(threshold) or not 0 <= threshold <= 100:
               raise SystemExit("threshold must satisfy 0 <= threshold <= 100")
           PY
 
       - name: Initialize RAGFence
-        run: ragfence init --up
-
-      - name: Start target
         run: |
           mkdir -p .ragfence/reports
+          ragfence init
+
+      - name: Migrate and seed reference database
+        run: |
+          alembic upgrade head
+          python -c "from sqlalchemy import create_engine; from sqlalchemy.orm import Session; from ragfence.datasets import seed_reference_corp; import os; engine = create_engine(os.environ['RAGFENCE_TEST_DATABASE_DSN']); sess = Session(engine); seed_reference_corp(sess); sess.commit(); engine.dispose()"
+
+      - name: Start target
+        if: ${{ inputs.start-target-command != '' }}
+        run: |
           bash -c -- "$START_TARGET_COMMAND" >.ragfence/target-start.log 2>&1 &
           printf '%s\n' "$!" > .ragfence/target.pid
 
       - name: Wait for target readiness
+        if: ${{ inputs.start-target-command != '' && inputs.base-url != '' }}
         env:
           READINESS_ATTEMPTS: 30
           READINESS_DELAY_SECONDS: 2
@@ -140,15 +166,20 @@ jobs:
 
       - name: Evaluate target
         id: evaluate
-        continue-on-error: true
+        env:
+          CLI_THRESHOLD: ${{ inputs.threshold }}
         run: |
-          mkdir -p "$(dirname "$REPORT_PATH")"
           set +e
           if [ "$FAKE_PROVIDERS" = "true" ]; then
             export RAGFENCE_LLM_PROVIDER=fake
             export RAGFENCE_EMBEDDING_PROVIDER=fake
           fi
-          ragfence test --adapter "$ADAPTER" --base-url "$BASE_URL" --threshold "$THRESHOLD" --json --output "$REPORT_PATH"
+          LEGACY_THRESHOLD=$(python -c "print(float('$CLI_THRESHOLD') / 100.0)")
+          if [ "$ADAPTER" = "generic_http" ]; then
+            ragfence test --adapter "$ADAPTER" --base-url "$BASE_URL" --threshold "$LEGACY_THRESHOLD" --json --output "$REPORT_PATH"
+          else
+            ragfence test --adapter "$ADAPTER" --threshold "$LEGACY_THRESHOLD" --json --output "$REPORT_PATH"
+          fi
           cli_status=$?
           set -e
           case "$cli_status" in
@@ -160,6 +191,7 @@ jobs:
             printf 'status=%s\n' "$cli_status"
             printf 'report_exists=%s\n' "$report_exists"
           } >> "$GITHUB_OUTPUT"
+          exit "$cli_status"
 
       - name: Upload JSON report
         if: always()
@@ -197,7 +229,9 @@ jobs:
                   outcome_value = report.get("outcome")
                   if isinstance(outcome_value, str):
                       outcome = outcome_value[:80]
-                  passed_value = report.get("passed_threshold")
+                  passed_value = report.get("gate_passed")
+                  if passed_value is None:
+                      passed_value = report.get("passed_threshold")
                   if isinstance(passed_value, bool):
                       passed = str(passed_value).lower()
               except (OSError, ValueError, TypeError):

@@ -27,7 +27,7 @@ def test_compose_declares_healthcheck() -> None:
 
 def test_compose_maps_host_port() -> None:
     content = COMPOSE.read_text(encoding="utf-8")
-    assert "5432:5432" in content
+    assert "${RAGFENCE_DB_PORT:-5434}:5432" in content
 
 
 @pytest.mark.skipif(

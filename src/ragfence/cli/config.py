@@ -31,8 +31,13 @@ def load_config(
     *,
     environ: Mapping[str, str] | None = None,
     base_url_override: str | None = None,
+    require: bool = False,
 ) -> CliConfig:
-    """Load TOML settings and apply ``RAGFENCE_`` environment overrides."""
+    """Load TOML settings and apply ``RAGFENCE_`` environment overrides.
+
+    With ``require=True`` (an explicitly passed ``--config``), a missing file is
+    a fail-closed ``ConfigError`` instead of a silent fallback to defaults.
+    """
     config_path = path or Path("ragfence.toml")
     values: dict[str, object] = {}
     if config_path.exists():
@@ -42,6 +47,8 @@ def load_config(
         except (OSError, tomllib.TOMLDecodeError) as exc:
             raise ConfigError(f"invalid configuration: {config_path}") from exc
         values.update(loaded)
+    elif require:
+        raise ConfigError(f"configuration not found: {config_path}; run 'ragfence init' first")
 
     env = os.environ if environ is None else environ
     if "RAGFENCE_THRESHOLD" in env:

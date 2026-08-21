@@ -18,6 +18,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
+from ragfence.core.enums import Classification
+from ragfence.core.models import AuthorizationContext
 from ragfence.db.models import (
     Document,
     Tenant,
@@ -30,6 +32,7 @@ from ragfence.db.repositories import (
     DocumentRepository,
     UserRepository,
     active_filters,
+    build_acl_predicate,
     group_ids_for_user,
 )
 
@@ -191,3 +194,21 @@ def test_group_ids_for_user_joins_user_groups_with_tenant_scope() -> None:
     assert "users" in sql  # tenant scope joins through the users table
     assert "users.tenant_id =" in sql
     assert "user_groups.user_id =" in sql
+
+
+def test_acl_predicate_treats_unknown_classifications_as_most_restrictive() -> None:
+    ctx = AuthorizationContext(
+        tenant_id=UUID(TENANT_A),
+        user_id=UUID("33333333-4444-4555-8666-777777777777"),
+        department_id=None,
+        classification=Classification.INTERNAL,
+        allowed_user_ids=set(),
+        allowed_group_ids=set(),
+        is_authenticated=True,
+        source="synthetic",
+    )
+
+    statement = select(DocumentACLModel).where(build_acl_predicate(DocumentACLModel, ctx))
+    params = statement.compile(dialect=postgresql.dialect()).params
+
+    assert 4 in params.values()

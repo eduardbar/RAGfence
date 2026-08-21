@@ -77,6 +77,23 @@ def test_clearance_below_document_denied() -> None:
     assert decision.reasons == ["classification_escalation"]
 
 
+def test_unauthenticated_context_is_denied_before_any_grant() -> None:
+    """An unauthenticated context is never authorized, including by an explicit ACL grant."""
+    user = uuid.uuid4()
+    policy = DocumentPolicy(
+        classification=Classification.INTERNAL,
+        department_id=FINANCE,
+        allowed_user_ids={user},
+        allowed_group_ids=set(),
+    )
+    ctx = _ctx(department_id=FINANCE, user_id=user).model_copy(update={"is_authenticated": False})
+
+    decision = decide(policy, ctx)
+
+    assert decision.allowed is False
+    assert decision.reasons == ["unauthenticated"]
+
+
 def test_allowlisted_user_crosses_departments() -> None:
     user = uuid.uuid4()
     policy = DocumentPolicy(

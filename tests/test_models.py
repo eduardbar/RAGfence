@@ -113,6 +113,12 @@ def test_retrieval_request_construction() -> None:
     assert request.filters == {}
 
 
+@pytest.mark.parametrize("top_k", [0, -1, 51, 10_000])
+def test_retrieval_request_rejects_unbounded_top_k(top_k: int) -> None:
+    with pytest.raises(ValidationError):
+        RetrievalRequest(query="quarterly report", authorization=_ctx(), top_k=top_k)
+
+
 def test_retrieved_chunk_construction() -> None:
     chunk = RetrievedChunk(
         chunk_id=_uuid(),

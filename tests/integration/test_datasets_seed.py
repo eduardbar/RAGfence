@@ -16,7 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from ragfence.datasets import seed_acme_corp
+from ragfence.datasets import seed_acme_corp, seed_reference_corp
 from ragfence.db.base import Base
 from ragfence.db.models import (
     Department,
@@ -116,3 +116,25 @@ def test_board_plan_rows_persist_null_department(db_engine: Engine) -> None:
         ).all()
         assert len(scoped_docs) == 4
         assert all(doc.department_id is not None for doc in scoped_docs)
+
+
+@pytest.mark.db
+def test_reference_seed_persists_acme_and_globex_identities(db_engine: Engine) -> None:
+    with Session(db_engine) as session:
+        seed_reference_corp(session)
+        tenants = {tenant.slug for tenant in session.scalars(select(Tenant)).all()}
+        emails = {user.email for user in session.scalars(select(User)).all()}
+
+    assert tenants == {"acme-corp", "globex-corp"}
+    assert "engineering_employee@acme-corp.example" in emails
+    assert "engineering_employee@globex-corp.example" in emails
+
+
+@pytest.mark.db
+def test_reference_seed_persists_embeddings_for_every_chunk(db_engine: Engine) -> None:
+    with Session(db_engine) as session:
+        seed_reference_corp(session)
+        chunks = session.scalars(select(DocumentChunk)).all()
+
+    assert chunks
+    assert all(chunk.embedding is not None for chunk in chunks)

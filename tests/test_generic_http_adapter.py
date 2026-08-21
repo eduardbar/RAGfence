@@ -17,7 +17,9 @@ class RecordingTransport:
         self.posts: list[tuple[str, object]] = []
         self.healthy = healthy
 
-    def post_json(self, path: str, payload: object) -> object:
+    def post_json(
+        self, path: str, payload: object, *, extra_headers: dict[str, str] | None = None
+    ) -> object:
         self.posts.append((path, payload))
         return self.responses.pop(0)
 

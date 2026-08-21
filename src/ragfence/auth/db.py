@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from ragfence.auth.errors import IdentityInactiveError, IdentityNotFoundError
 from ragfence.auth.identity import AuthenticatedIdentity
 from ragfence.core.models import AuthorizationContext
+from ragfence.db.models import User
 from ragfence.db.repositories import UserRepository, group_ids_for_user
 
 
@@ -35,6 +36,15 @@ class DbIdentityProvider:
 
     def resolve(self, principal: str) -> AuthenticatedIdentity:
         user = UserRepository(self._session, self._tenant_id).get_active(email=principal)
+        return self._identity_for(user, principal)
+
+    def resolve_user_id(self, user_id: UUID) -> AuthenticatedIdentity:
+        """Resolve a persisted user id within the provider's fixed tenant boundary."""
+        user = UserRepository(self._session, self._tenant_id).get_active(user_id=user_id)
+        return self._identity_for(user, str(user_id))
+
+    @staticmethod
+    def _identity_for(user: User | None, principal: str) -> AuthenticatedIdentity:
         if user is None:
             raise IdentityNotFoundError(principal)
         if not user.is_active:

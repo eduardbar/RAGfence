@@ -9,6 +9,8 @@ import venv
 import zipfile
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -19,6 +21,7 @@ def _run(
 
 
 def test_wheel_installs_and_runs_outside_checkout(tmp_path: Path) -> None:
+    _ = tmp_path  # noqa
     """Build a wheel, install it non-editably, and exercise import plus help."""
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
@@ -77,3 +80,52 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path: Path) -> None:
     help_result = _run([str(script), "--help"], cwd=tmp_path, env=env)
     assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     assert "Usage" in help_result.stdout
+
+
+def test_wheel_ships_reference_environment(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """El wheel incluye docker-compose.yml + migraciones Alembic del entorno de referencia."""
+    wheelhouse = tmp_path_factory.mktemp("refwheel")
+    built = _run(
+        [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "--wheel-dir", str(wheelhouse)],
+        cwd=ROOT,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+    wheels = sorted(wheelhouse.glob("ragfence-*.whl"))
+    assert len(wheels) == 1
+
+    with zipfile.ZipFile(wheels[0]) as archive:
+        names = set(archive.namelist())
+        assert "ragfence/reference/docker-compose.yml" in names
+        assert "ragfence/reference/alembic.ini" in names
+        assert "ragfence/reference/alembic/env.py" in names
+        assert any(
+            name.startswith("ragfence/reference/alembic/versions/") and name.endswith(".py")
+            for name in names
+        ), "migraciones Alembic ausentes del wheel"
+
+
+def test_packaged_reference_environment_matches_checkout() -> None:
+    """Las copias empaquetadas están sincronizadas con los originales del checkout."""
+    packaged = ROOT / "src" / "ragfence" / "reference"
+    originals = {
+        "docker-compose.yml": ROOT / "docker-compose.yml",
+        "alembic.ini": ROOT / "alembic.ini",
+        "alembic/env.py": ROOT / "alembic" / "env.py",
+        "alembic/script.py.mako": ROOT / "alembic" / "script.py.mako",
+    }
+    versions = sorted((ROOT / "alembic" / "versions").glob("*.py"))
+    assert versions, "el checkout debe tener migraciones"
+    for relative in versions:
+        originals[f"alembic/versions/{relative.name}"] = relative
+
+    missing = [relative for relative in originals if not (packaged / relative).is_file()]
+    assert not missing, f"archivos de referencia no empaquetados: {missing}"
+
+    drifted = [
+        relative
+        for relative, source in originals.items()
+        if (packaged / relative).read_text(encoding="utf-8") != source.read_text(encoding="utf-8")
+    ]
+    assert not drifted, f"copias desincronizadas con el checkout: {drifted}"

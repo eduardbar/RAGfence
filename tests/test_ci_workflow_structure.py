@@ -114,7 +114,7 @@ def test_evaluation_contract_has_fixed_report_and_final_gate() -> None:
     workflow = load_workflow()
     steps = all_steps(workflow)
     run_text = workflow["_raw"] + "\n" + "\n".join(str(step.get("run", "")) for step in steps)
-    assert "ragfence init --up" in run_text
+    assert "ragfence init" in run_text
     assert "ragfence test" in run_text
     assert "--adapter" in run_text
     assert "--base-url" in run_text
@@ -192,3 +192,38 @@ def test_fixture_comparison_ignores_run_metadata_but_keeps_stable_fields() -> No
     }
     assert first["run_id"] != second["run_id"]
     assert first["timestamp"] != second["timestamp"]
+
+
+def test_reusable_workflow_starts_pgvector_service() -> None:
+    workflow = load_workflow()
+    raw = workflow["_raw"]
+    assert "pgvector/pgvector" in raw
+    assert "services:" in raw
+
+
+def test_reusable_workflow_exports_database_dsn() -> None:
+    workflow = load_workflow()
+    raw = workflow["_raw"]
+    assert "RAGFENCE_TEST_DATABASE_DSN" in raw
+    assert "postgresql+psycopg://ragfence:ragfence@" in raw
+
+
+def test_reusable_workflow_runs_migrations_and_seed() -> None:
+    workflow = load_workflow()
+    raw = workflow["_raw"]
+    assert "alembic upgrade head" in raw
+    assert "seed_reference_corp" in raw
+
+
+def test_reusable_workflow_gates_have_no_continue_on_error() -> None:
+    workflow = load_workflow()
+    steps = all_steps(workflow)
+    gate_steps = [
+        step
+        for step in steps
+        if "gate" in step.get("name", "").lower() or "evaluate" in step.get("name", "").lower()
+    ]
+    for step in gate_steps:
+        assert not step.get("continue-on-error"), (
+            f"step '{step.get('name')}' must not use continue-on-error"
+        )

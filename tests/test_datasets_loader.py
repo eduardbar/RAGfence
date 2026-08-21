@@ -12,7 +12,7 @@ ORM ``values_callable`` persists the member's lowercase ``.value``.
 """
 
 from ragfence.core.enums import Classification, DocumentStatus
-from ragfence.datasets import SEED, build_acme_corp
+from ragfence.datasets import SEED, build_acme_corp, build_globex_corp
 from ragfence.datasets.loader import RowPlan, _build_row_plan
 
 EXPECTED_KIND_ORDER = (
@@ -164,3 +164,12 @@ def test_document_plan_carries_required_not_null_columns() -> None:
         if plan.kind == "user":
             assert plan.values["password_hash"]
             assert plan.values["display_name"]
+
+
+def test_globex_plan_uses_its_own_tenant_and_user_natural_keys() -> None:
+    globex = build_globex_corp(SEED)
+    plans = _build_row_plan(globex)
+
+    assert dict(plans[0].key) == {"slug": "globex-corp"}
+    user_emails = {dict(plan.key)["email"] for plan in plans if plan.kind == "user"}
+    assert "engineering_employee@globex-corp.example" in user_emails

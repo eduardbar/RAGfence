@@ -76,7 +76,6 @@ class RetrievalService:
         _embedder = FakeEmbeddingProvider()
         self._embed = embed or (lambda text: _embedder.embed([text])[0])
         self._document_meta = document_meta or (lambda _did: None)
-        self._store_calls = 0
 
     def retrieve(self, request: RetrievalRequest) -> SecureRetrievalResult:
         """Run the guard before any store call; DENY short-circuits with zero store calls."""
@@ -88,6 +87,7 @@ class RetrievalService:
 
         chunks: list[RetrievedChunk] = []
         citations: list[Citation] = []
+        store_call_count = 0
         if allowed:
             # Corpus-wide filtered search: one pre-filter statement built from typed
             # ACL columns only (never JSONB metadata); the predicate is the gate.
@@ -98,7 +98,7 @@ class RetrievalService:
                 policy_predicate=predicate,
                 top_k=request.top_k,
             )
-            self._store_calls += 1
+            store_call_count = 1
             citations = build_citations(chunks, self._document_meta)
 
         latency_ms = max(0, int((datetime.now(UTC) - started).total_seconds() * 1000))
@@ -108,7 +108,7 @@ class RetrievalService:
             reasons=reasons,
             chunk_count=len(chunks),
             latency_ms=latency_ms,
-            store_call_count=self._store_calls,
+            store_call_count=store_call_count,
         )
         return SecureRetrievalResult(
             decision=decision,

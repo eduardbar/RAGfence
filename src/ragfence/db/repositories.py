@@ -125,22 +125,26 @@ def build_acl_predicate(acl: Any, ctx: AuthorizationContext) -> ColumnElement[bo
     ``allowed_user_ids``, ``allowed_group_ids`` — and NEVER the JSONB
     ``metadata`` column, keeping the filter surface exact and non-spoofable
     (deny-by-default: no grant and no department match means no access).
+
+    PUBLIC documents are accessible to all tenant users regardless of department.
     """
     classification_rank = case(
         (acl.classification == Classification.PUBLIC, 0),
         (acl.classification == Classification.INTERNAL, 1),
         (acl.classification == Classification.CONFIDENTIAL, 2),
         (acl.classification == Classification.RESTRICTED, 3),
-        else_=0,
+        else_=Classification.RESTRICTED.rank + 1,
     )
     department_match = and_(
         acl.department_id.is_not(None),
         acl.department_id == ctx.department_id,
     )
+    public_access = acl.classification == Classification.PUBLIC
     return and_(
         acl.tenant_id == ctx.tenant_id,
         classification_rank <= ctx.classification.rank,
         or_(
+            public_access,
             acl.allowed_user_ids.any(ctx.user_id),
             acl.allowed_group_ids.overlap(list(ctx.allowed_group_ids)),
             department_match,

@@ -11,6 +11,7 @@ from ragfence.core.models import AuthorizationContext, DocumentPolicy, PolicyDec
 REASON_CLASSIFICATION_ESCALATION = "classification_escalation"
 REASON_NO_IMPLICIT_DEPARTMENT_ACCESS = "no_implicit_department_access"
 REASON_DENY_BY_DEFAULT = "deny_by_default"
+REASON_UNAUTHENTICATED = "unauthenticated"
 
 
 def decide(policy: DocumentPolicy, ctx: AuthorizationContext) -> PolicyDecision:
@@ -18,13 +19,24 @@ def decide(policy: DocumentPolicy, ctx: AuthorizationContext) -> PolicyDecision:
 
     Rule order: classification escalation (4) first; explicit grants (5-6)
     precede department scoping (7-8); everything else denies (9).
+
+    PUBLIC documents are accessible to all authenticated tenant users regardless
+    of department (public-content exception).
     """
     evaluated_at = datetime.now(UTC)
 
+    if not ctx.is_authenticated:
+        return PolicyDecision(
+            allowed=False, reasons=[REASON_UNAUTHENTICATED], evaluated_at=evaluated_at
+        )
     if policy.classification.rank > ctx.classification.rank:
         return PolicyDecision(
             allowed=False, reasons=[REASON_CLASSIFICATION_ESCALATION], evaluated_at=evaluated_at
         )
+    from ragfence.core.enums import Classification
+
+    if policy.classification == Classification.PUBLIC:
+        return PolicyDecision(allowed=True, reasons=[], evaluated_at=evaluated_at)
     if ctx.user_id in policy.allowed_user_ids:
         return PolicyDecision(allowed=True, reasons=[], evaluated_at=evaluated_at)
     if ctx.allowed_group_ids.intersection(policy.allowed_group_ids):

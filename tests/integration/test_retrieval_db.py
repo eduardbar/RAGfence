@@ -184,6 +184,7 @@ def test_db_path_returns_only_allowed_rows_and_zero_leakage(db_engine: Engine) -
     finance_dept = ACME.departments["finance"].id
     cfo = ACME.documents["finance/payroll/cfo-payroll-summary.pdf"]
     board = ACME.documents["executive/strategy/2026-board-plan.pdf"]
+    handbook = ACME.documents["hr/employee-handbook.md"]
 
     other_tenant = uuid4()
     deleted_id = uuid4()
@@ -233,8 +234,8 @@ def test_db_path_returns_only_allowed_rows_and_zero_leakage(db_engine: Engine) -
 
     assert result.decision == RetrievalDecision.ALLOW
     returned = {c.document_id for c in result.chunks}
-    # Exactly the allowed finance document is returned.
-    assert returned == {cfo.id}
+    # CFO doc (department match) + PUBLIC handbook (spec R2.3: public tenant-wide readability).
+    assert returned == {cfo.id, handbook.id}
     # The restricted board-plan (classification escalation) never leaks.
     assert board.id not in returned
     # Deleted, non-ready, and cross-tenant chunks never leak.

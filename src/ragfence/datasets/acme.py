@@ -187,6 +187,11 @@ def _stable_id(kind: str, slug: str) -> UUID:
     return uuid5(UUID_NAMESPACE, f"acme-corp/{kind}/{slug}")
 
 
+def _globex_id(kind: str, slug: str) -> UUID:
+    """Stable identifier for the independent Globex fixture tenant."""
+    return uuid5(UUID_NAMESPACE, f"globex-corp/{kind}/{slug}")
+
+
 def _compose_body(seed: int, slug: str, paragraphs: tuple[str, ...]) -> str:
     """Deterministic 1-3 paragraph body from the fixed literal pool.
 
@@ -261,6 +266,101 @@ def build_acme_corp(seed: int = SEED) -> AcmeCorpDataset:
                 classification=classification,
                 allowed_user_ids=set(),
                 allowed_group_ids={groups[slug].id for slug in group_slugs},
+            ),
+        )
+    return AcmeCorpDataset(
+        tenant=tenant,
+        departments=departments,
+        groups=groups,
+        users=users,
+        user_groups=user_groups,
+        documents=documents,
+    )
+
+
+def build_globex_corp(seed: int = SEED) -> AcmeCorpDataset:
+    """Build a deterministic second tenant with real users and documents.
+
+    The schema allows identical corpus content per tenant, but every persisted
+    identity, ACL reference, and document identifier is tenant-specific. This
+    makes the fixture suitable for exercising the retrieval tenant boundary.
+    """
+    acme = build_acme_corp(seed)
+    tenant = AcmeTenant(
+        id=_globex_id("tenant", "globex-corp"), slug="globex-corp", name="Globex Corp"
+    )
+    departments = {
+        slug: AcmeDepartment(
+            id=_globex_id("department", slug),
+            tenant_id=tenant.id,
+            slug=department.slug,
+            name=department.name,
+        )
+        for slug, department in acme.departments.items()
+    }
+    groups = {
+        slug: AcmeGroup(
+            id=_globex_id("group", slug),
+            tenant_id=tenant.id,
+            slug=group.slug,
+            name=group.name,
+        )
+        for slug, group in acme.groups.items()
+    }
+    user_ids = {
+        user.id: _globex_id("user", user.email.split("@", 1)[0]) for user in acme.users.values()
+    }
+    users = {
+        f"{user.email.split('@', 1)[0]}@globex-corp.example": AcmeUser(
+            id=user_ids[user.id],
+            tenant_id=tenant.id,
+            department_id=departments[
+                next(
+                    slug
+                    for slug, department in acme.departments.items()
+                    if department.id == user.department_id
+                )
+            ].id,
+            email=f"{user.email.split('@', 1)[0]}@globex-corp.example",
+            name=user.name,
+            classification=user.classification,
+            is_active=user.is_active,
+        )
+        for user in acme.users.values()
+    }
+    group_ids = {group.id: groups[slug].id for slug, group in acme.groups.items()}
+    user_groups = tuple(
+        (user_ids[user_id], group_ids[group_id]) for user_id, group_id in acme.user_groups
+    )
+    department_ids = {
+        department.id: departments[slug].id for slug, department in acme.departments.items()
+    }
+    documents: dict[str, AcmeDocument] = {}
+    for path, document in acme.documents.items():
+        document_id = _globex_id("document", path)
+        documents[path] = AcmeDocument(
+            id=document_id,
+            tenant_id=tenant.id,
+            path=path,
+            title=f"Globex {document.title}",
+            source="globex-synthetic",
+            checksum=sha256_hex(canonical_json(f"globex-corp:{document.body}")),
+            classification=document.classification,
+            status=document.status,
+            body=document.body,
+            acl=DocumentACL(
+                document_id=document_id,
+                tenant_id=tenant.id,
+                department_id=(
+                    department_ids[document.acl.department_id]
+                    if document.acl.department_id is not None
+                    else None
+                ),
+                classification=document.acl.classification,
+                allowed_user_ids={user_ids[user_id] for user_id in document.acl.allowed_user_ids},
+                allowed_group_ids={
+                    group_ids[group_id] for group_id in document.acl.allowed_group_ids
+                },
             ),
         )
     return AcmeCorpDataset(

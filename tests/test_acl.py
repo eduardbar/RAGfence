@@ -88,8 +88,19 @@ def test_predicate_grant_branches_are_the_only_alternatives() -> None:
     assert len(and_clauses) == 3  # tenant, classification rank, grant/department OR
     grant_branch = and_clauses[2]
     inner = getattr(grant_branch, "element", grant_branch)  # unwrap Grouping if present
-    assert len(inner.clauses) == 3  # user grant, group grant, department match
-    department_match = inner.clauses[2]
+    assert len(inner.clauses) == 4  # public access, user grant, group grant, department match
+
+    public_access = inner.clauses[0]
+    assert "classification" in str(public_access.left)
+    assert public_access.right.effective_value == Classification.PUBLIC
+
+    user_grant = inner.clauses[1]
+    assert "allowed_user_ids" in str(user_grant.left)
+
+    group_grant = inner.clauses[2]
+    assert "allowed_group_ids" in str(group_grant.left)
+
+    department_match = inner.clauses[3]
     assert len(department_match.clauses) == 2  # IS NOT NULL AND department_id = ctx
 
 

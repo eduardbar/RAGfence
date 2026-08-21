@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ragfence.core.enums import Classification, FindingSeverity
 
@@ -69,8 +69,8 @@ class RetrievalRequest(BaseModel):
 
     query: str
     authorization: AuthorizationContext
-    top_k: int = 10
-    filters: dict[str, Any] = {}
+    top_k: int = Field(default=10, ge=1, le=50)
+    filters: dict[str, Any] = Field(default_factory=dict)
 
 
 class RetrievedChunk(BaseModel):

@@ -4,7 +4,7 @@ adapter = "reference"
 threshold = 0.8
 
 [database]
-dsn = "postgresql+psycopg://ragfence:CHANGEME@localhost:5432/ragfence"
+dsn = "postgresql+psycopg://ragfence:CHANGEME@localhost:5434/ragfence"
 
 [embeddings]
 provider = "fake"

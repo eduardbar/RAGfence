@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import time
 from pathlib import Path
 
 import typer
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from ragfence.cli.config import ConfigError, load_config
 from ragfence.cli.errors import RuntimeCommandError
 from ragfence.cli.reporting import render_json, render_text, write_report
 from ragfence.cli.seams import check_adapter, check_demo, default_report_path, evaluate
+from ragfence.datasets import seed_reference_corp
 
 app = typer.Typer(
     name="ragfence",
@@ -19,6 +27,87 @@ app = typer.Typer(
 )
 adapter_app = typer.Typer(help="Validate configured RAG adapters.")
 app.add_typer(adapter_app, name="adapter")
+
+
+def _reference_root() -> Path:
+    """Locate the reference environment: checkout root or packaged wheel copy.
+
+    A repository checkout keeps using its own ``alembic.ini``/``alembic``/
+    ``docker-compose.yml`` at the repo root. An installed (non-editable) wheel
+    falls back to the copies shipped inside ``ragfence/reference`` so the CLI
+    never depends on the checkout to bootstrap the reference database.
+    """
+    cli_dir = Path(__file__).resolve().parent
+    checkout_root = cli_dir.parents[2]
+    if (checkout_root / "alembic.ini").is_file() and (checkout_root / "alembic").is_dir():
+        return checkout_root
+    packaged = cli_dir.parent / "reference"
+    if (packaged / "docker-compose.yml").is_file() and (packaged / "alembic.ini").is_file():
+        return packaged
+    raise RuntimeCommandError(
+        "reference environment not found; run from a repository checkout or "
+        "reinstall the ragfence wheel"
+    )
+
+
+def bootstrap_reference(path: Path) -> None:
+    """Start, migrate, and seed the bundled local pgvector reference environment.
+
+    Idempotent: if the configured DSN already answers, docker compose is not
+    invoked — an existing healthy reference database is migrated and reseeded
+    in place. Compose startup happens only when the database is unreachable.
+    """
+    del path  # kept for signature compatibility; the environment lives in the package
+    root = _reference_root()
+    dsn = os.environ.get(
+        "RAGFENCE_DATABASE_DSN", "postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence"
+    )
+    engine = create_engine(dsn, connect_args={"connect_timeout": 2})
+    try:
+        reachable = False
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            reachable = True
+        except Exception:
+            reachable = False
+        if not reachable:
+            try:
+                subprocess.run(["docker", "compose", "up", "-d"], cwd=root, check=True, timeout=120)
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                raise RuntimeCommandError(
+                    "could not start PostgreSQL/pgvector; install Docker Desktop and "
+                    "run 'docker compose up -d'"
+                ) from exc
+            for _ in range(30):
+                try:
+                    with engine.connect() as connection:
+                        connection.execute(text("SELECT 1"))
+                    break
+                except Exception:
+                    time.sleep(1)
+            else:
+                raise RuntimeCommandError(
+                    "PostgreSQL/pgvector did not become ready within 30 seconds"
+                )
+        alembic = Config(str(root / "alembic.ini"))
+        alembic.set_main_option("sqlalchemy.url", dsn)
+        alembic.set_main_option("script_location", str(root / "alembic"))
+        command.upgrade(alembic, "head")
+        with Session(engine) as session:
+            seed_reference_corp(session)
+    finally:
+        engine.dispose()
+
+
+DEFAULT_CONFIG_PATH = Path("ragfence.toml")
+
+
+def _resolve_config(config: Path | None) -> tuple[Path, bool]:
+    """Resolve the CLI config option to (path, was_explicitly_provided)."""
+    if config is None:
+        return DEFAULT_CONFIG_PATH, False
+    return config, True
 
 
 @app.callback()
@@ -31,6 +120,7 @@ def init(
     path: Path = typer.Option(Path("."), help="Project directory to initialize."),  # noqa: B008
     force: bool = typer.Option(False, help="Replace an existing configuration."),  # noqa: B008
     with_demo: bool = typer.Option(False, "--with-demo", help="Include demo settings."),  # noqa: B008
+    up: bool = typer.Option(False, "--up", help="Start, migrate, and seed the local reference DB."),  # noqa: B008
 ) -> None:
     """Initialize a RAGFence project."""
     del with_demo
@@ -44,23 +134,31 @@ def init(
         encoding="utf-8",
     )
     (path / ".ragfence" / "reports").mkdir(parents=True, exist_ok=True)
+    if up:
+        try:
+            bootstrap_reference(path)
+        except RuntimeCommandError as exc:
+            typer.echo(f"command failed: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
     typer.echo(f"initialized RAGFence project: {path}")
 
 
 @app.command("test")
 def test_command(
-    config: Path = typer.Option(Path("ragfence.toml"), help="Configuration file."),  # noqa: B008
+    config: Path | None = typer.Option(None, help="Configuration file."),  # noqa: B008
     adapter: str | None = typer.Option(None, help="Adapter name."),  # noqa: B008
     base_url: str | None = typer.Option(None, help="Target base URL."),  # noqa: B008
     threshold: float | None = typer.Option(None, help="Minimum passing score."),  # noqa: B008
     json_output: bool = typer.Option(False, "--json", help="Render JSON output."),  # noqa: B008
+    output: Path | None = typer.Option(None, "--output", help="Explicit report destination."),  # noqa: B008
 ) -> None:
     """Run the configured RAGFence evaluation suite."""
+    config_path, explicit_config = _resolve_config(config)
     try:
-        settings = load_config(config)
+        settings = load_config(config_path, require=explicit_config)
         selected_adapter = settings.adapter if adapter is None else adapter
         if base_url is not None and selected_adapter == "generic_http":
-            settings = load_config(config, base_url_override=base_url)
+            settings = load_config(config_path, base_url_override=base_url, require=explicit_config)
         if threshold is not None:
             settings = settings.__class__(
                 threshold=threshold,
@@ -70,27 +168,35 @@ def test_command(
         report = evaluate(settings, adapter=adapter, base_url=base_url)
         destination = write_report(
             report,
-            default_report_path(config, json_output=json_output),
+            output or default_report_path(config_path, json_output=json_output),
             json_output=json_output,
         )
     except (ConfigError, RuntimeCommandError, RuntimeError, ValueError) as exc:
         typer.echo(f"command failed: {exc}", err=True)
         raise typer.Exit(code=2) from exc
-    output = render_json(report) if json_output else render_text(report)
-    typer.echo(output, nl=False)
-    if report.score < report.threshold:
+    except OSError as exc:
+        typer.echo(f"command failed: cannot write report: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    rendered_output = render_json(report) if json_output else render_text(report)
+    typer.echo(rendered_output, nl=False)
+    gate_passed = report.artifact.get("gate_passed") if report.artifact else None
+    if gate_passed is not None:
+        if not gate_passed:
+            raise typer.Exit(code=1)
+    elif report.score < report.threshold:
         raise typer.Exit(code=1)
     typer.echo(f"report written: {destination}", err=True)
 
 
 @app.command()
 def demo(
-    config: Path = typer.Option(Path("ragfence.toml"), help="Configuration file."),  # noqa: B008
+    config: Path | None = typer.Option(None, help="Configuration file."),  # noqa: B008
     up: bool = typer.Option(False, help="Start the local reference service."),  # noqa: B008
 ) -> None:
     """Start or inspect the local reference demo."""
+    config_path, explicit_config = _resolve_config(config)
     try:
-        check_demo(load_config(config), start=up)
+        check_demo(load_config(config_path, require=explicit_config), start=up)
     except (ConfigError, RuntimeCommandError, RuntimeError, ValueError) as exc:
         typer.echo(f"command failed: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -100,7 +206,7 @@ def demo(
 @adapter_app.command("check")
 def adapter_check(
     name: str = typer.Argument("reference", help="Adapter name to validate."),  # noqa: B008
-    config: Path = typer.Option(Path("ragfence.toml"), help="Configuration file."),  # noqa: B008
+    config: Path | None = typer.Option(None, help="Configuration file."),  # noqa: B008
     base_url: str | None = typer.Option(None, help="Target base URL."),  # noqa: B008
     json_output: bool = typer.Option(False, "--json", help="Render JSON output."),  # noqa: B008
 ) -> None:

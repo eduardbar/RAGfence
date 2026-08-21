@@ -285,3 +285,20 @@ def test_allow_trace_records_decision_reasons_count_and_no_content() -> None:
     # No full document content or secret leaks into the trace.
     assert cfo.body not in trace.reasons
     assert "password" not in str(trace.reasons)
+
+
+def test_trace_store_call_count_is_scoped_to_one_request() -> None:
+    """A reused service reports store calls for the current request, not historical calls."""
+    acme = build_acme_corp()
+    store = CountingVectorStore()
+    ctx = acme.context_for("finance_analyst@acme-corp.example")
+    cfo = acme.documents["finance/payroll/cfo-payroll-summary.pdf"]
+    store.add(_chunk_for(cfo), _embed("retrieval test"))
+    service = _make_service(acme, store)
+
+    first = service.retrieve(_request(acme, ctx, cfo))
+    second = service.retrieve(_request(acme, ctx, cfo))
+
+    assert first.trace.store_call_count == 1
+    assert second.trace.store_call_count == 1
+    assert store.search_calls == 2

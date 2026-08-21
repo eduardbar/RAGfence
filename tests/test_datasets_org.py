@@ -8,7 +8,7 @@ Spec reference: openspec/changes/ragfence-acme-dataset/specs/synthetic-dataset/s
 from uuid import UUID
 
 from ragfence.core.enums import Classification
-from ragfence.datasets import SEED, build_acme_corp
+from ragfence.datasets import SEED, build_acme_corp, build_globex_corp
 
 EXPECTED_DEPARTMENTS = {"engineering", "hr", "finance", "legal", "executive"}
 ALL_TIERS = {
@@ -101,3 +101,18 @@ def test_key_identifiers_are_fixed_uuid5_values() -> None:
     assert ds.documents["finance/payroll/cfo-payroll-summary.pdf"].id == UUID(
         "281f4c51-2963-56d2-82b0-d2a738997def"
     )
+
+
+def test_globex_fixture_has_resolvable_identities_and_no_acme_identifier_collisions() -> None:
+    acme = build_acme_corp(SEED)
+    globex = build_globex_corp(SEED)
+
+    assert globex.tenant.slug == "globex-corp"
+    assert globex.tenant.id != acme.tenant.id
+    assert set(globex.users).isdisjoint(acme.users)
+    assert {document.id for document in globex.documents.values()}.isdisjoint(
+        document.id for document in acme.documents.values()
+    )
+    actor = globex.context_for("engineering_employee@globex-corp.example")
+    assert actor.tenant_id == globex.tenant.id
+    assert actor.is_authenticated is True

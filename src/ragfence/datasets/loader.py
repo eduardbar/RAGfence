@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ragfence.datasets.acme import AcmeCorpDataset, build_acme_corp
+from ragfence.datasets.acme import AcmeCorpDataset, build_acme_corp, build_globex_corp
 from ragfence.datasets.constants import SEED
 from ragfence.db.models import (
     Department,
@@ -33,6 +33,7 @@ from ragfence.db.models import (
     User,
     UserGroup,
 )
+from ragfence.providers.fakes import FakeEmbeddingProvider
 
 # Placeholder hash for synthetic users: ``users.password_hash`` is NOT NULL with
 # no server default. These fixtures never authenticate, so any non-empty marker
@@ -200,6 +201,14 @@ def _exists(session: Session, plan: RowPlan) -> bool:
     return session.scalar(stmt) is not None
 
 
+def _seed_dataset(session: Session, dataset: AcmeCorpDataset) -> None:
+    """Add missing rows for one deterministic tenant fixture without committing."""
+    for plan in _build_row_plan(dataset):
+        if _exists(session, plan):
+            continue
+        session.add(_ORM_BY_KIND[plan.kind](**plan.values))
+
+
 def seed_acme_corp(session: Session) -> None:
     """Idempotently seed the Acme Corp fixture into a migrated schema (S8, S9).
 
@@ -207,8 +216,18 @@ def seed_acme_corp(session: Session) -> None:
     are skipped, so re-runs are no-ops and row counts never change. All inserts
     are flushed by the single commit at the end (atomic fixture).
     """
-    for plan in _build_row_plan(build_acme_corp(SEED)):
-        if _exists(session, plan):
-            continue
-        session.add(_ORM_BY_KIND[plan.kind](**plan.values))
+    _seed_dataset(session, build_acme_corp(SEED))
+    session.commit()
+
+
+def seed_reference_corp(session: Session) -> None:
+    """Idempotently seed both tenants required by the production reference target."""
+    _seed_dataset(session, build_acme_corp(SEED))
+    _seed_dataset(session, build_globex_corp(SEED))
+    session.flush()
+    embedder = FakeEmbeddingProvider()
+    for chunk in session.scalars(
+        select(DocumentChunk).where(DocumentChunk.embedding.is_(None))
+    ).all():
+        chunk.embedding = embedder.embed([chunk.content])[0]
     session.commit()

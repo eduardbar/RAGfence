@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Protocol, cast
 
+from sqlalchemy import create_engine, text
+
 from ragfence.adapters import create_adapter
+from ragfence.adapters.reference import ReferenceAdapter
 from ragfence.attacks.runner import ScenarioTarget
 from ragfence.cli.config import CliConfig
 from ragfence.cli.errors import RuntimeCommandError
 from ragfence.cli.reporting import EvaluationReport
 from ragfence.core.models import RetrievalRequest, RetrievedChunk
-from ragfence.evaluation.engine import EvaluationEngine
-from ragfence.evaluation.report import build_report
 
 
 def canonical_threshold(legacy_threshold: float) -> float:
@@ -41,10 +43,16 @@ class _ExternalAdapter(ScenarioTarget, Protocol):
 
     def is_healthy(self) -> bool: ...
 
+    def check_identity_represented(self) -> bool: ...
+
 
 def _target_for(config: CliConfig, name: str) -> ScenarioTarget:
     if name == "reference":
-        return _ReferenceTarget()
+        dsn = os.environ.get(
+            "RAGFENCE_DATABASE_DSN",
+            "postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence",
+        )
+        return cast(ScenarioTarget, ReferenceAdapter(create_engine(dsn)))
     if name == "generic_http":
         if config.generic_http is None:
             raise RuntimeCommandError(
@@ -68,15 +76,77 @@ def evaluate(
         )
 
     threshold = canonical_threshold(config.threshold)
-    target = _target_for(config, requested_adapter)
-    summary = EvaluationEngine(target, threshold=threshold).run()
-    artifact = build_report(summary, summary.results)
-    payload = artifact.payload
-    outcome = payload.get("outcome", "")
+
+    from ragfence.attacks.generators import default_evaluation_controls
+    from ragfence.evaluation.gate import evaluate_gate
+    from ragfence.evaluation.matrix_runner import run_matrix
+
+    if requested_adapter == "reference":
+        dsn = os.environ.get(
+            "RAGFENCE_DATABASE_DSN",
+            "postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence",
+        )
+        engine = create_engine(dsn)
+        target: ReferenceAdapter | _ExternalAdapter = ReferenceAdapter(engine)
+        identity_represented_for = None
+    elif requested_adapter == "generic_http":
+        if config.generic_http is None:
+            raise RuntimeCommandError(
+                "external adapter target is unavailable; configure adapters.generic_http"
+            )
+        http_adapter = cast(
+            _ExternalAdapter, create_adapter(requested_adapter, config.generic_http)
+        )
+        target = http_adapter
+
+        def identity_represented_for(_c: object) -> bool:
+            return bool(http_adapter.check_identity_represented())
+    else:
+        raise RuntimeCommandError(f"unsupported adapter: {requested_adapter}")
+
+    controls = default_evaluation_controls()
+    results = run_matrix(target, controls, identity_represented_for=identity_represented_for)
+    decision = evaluate_gate(results, controls, threshold=threshold)
+
+    payload = {
+        "controls": [
+            {
+                "id": result.control.id,
+                "category": result.control.category,
+                "status": result.status,
+                "reason": result.reason,
+            }
+            for result in results
+        ],
+        "security_score": decision.security_score,
+        "utility_score": decision.utility_score,
+        "overall_score": decision.overall_score,
+        "gate_passed": decision.passed,
+        "gate_reason": list(decision.reasons),
+        "score": decision.overall_score * 100,
+        "threshold": threshold,
+        "outcome": "pass" if decision.passed else "fail",
+        "real_provider_used": False,
+        "results": [
+            {
+                "case_id": result.control.id,
+                "scenario_id": result.control.id,
+                "passed": result.status == "pass",
+                "outcome": result.status,
+                "reason": result.reason,
+                "findings": [],
+                "retrieved": [],
+                "answer": None,
+                "latency_ms": result.observation.latency_ms,
+            }
+            for result in results
+        ],
+    }
+
     return EvaluationReport(
-        score=float(payload.get("score", 0.0)),
-        threshold=float(payload.get("threshold", threshold)),
-        outcome=str(getattr(outcome, "value", outcome)),
+        score=float(payload["score"]),  # type: ignore[arg-type]
+        threshold=threshold,
+        outcome=str(payload["outcome"]),
         findings=[],
         artifact=payload,
     )
@@ -97,7 +167,39 @@ def check_adapter(
     """Validate and check reachability of a configured adapter."""
     del base_url
     if name == "reference":
-        raise RuntimeCommandError("reference adapter target is unavailable")
+        dsn = os.environ.get(
+            "RAGFENCE_DATABASE_DSN",
+            "postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence",
+        )
+        try:
+            engine = create_engine(dsn, connect_args={"connect_timeout": 2})
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            from sqlalchemy import inspect
+
+            insp = inspect(engine)
+            if "alembic_version" in insp.get_table_names():
+                with engine.connect() as conn:
+                    result = conn.execute(text("SELECT version_num FROM alembic_version"))
+                    version = result.scalar()
+                    if not version:
+                        raise RuntimeCommandError("alembic version not found")
+            with engine.connect() as conn:
+                tenant_count = conn.execute(text("SELECT COUNT(*) FROM tenants")).scalar()
+                doc_count = conn.execute(text("SELECT COUNT(*) FROM documents")).scalar()
+                user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            if tenant_count is None or tenant_count < 2:
+                raise RuntimeCommandError(f"insufficient tenants seeded: {tenant_count}")
+            if doc_count == 0:
+                raise RuntimeCommandError("no documents seeded")
+            if user_count == 0:
+                raise RuntimeCommandError("no users seeded")
+            engine.dispose()
+        except Exception as exc:
+            if isinstance(exc, RuntimeCommandError):
+                raise
+            raise RuntimeCommandError(f"reference adapter target is unavailable: {exc}") from exc
+        return
     adapter = cast(_ExternalAdapter, create_adapter(name, config.generic_http))
     if not adapter.is_healthy():
         raise RuntimeCommandError(f"adapter unhealthy: {name}")

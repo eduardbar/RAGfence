@@ -89,3 +89,17 @@ def redact_evidence(
             markers=markers,
         )
     return value
+
+
+def redact_secrets(text: str, secrets: Sequence[str]) -> str:
+    """Replace every occurrence of each secret in ``text`` with REDACTION_TOKEN.
+
+    Used by the adapter error boundary to ensure bearer tokens or other
+    dynamic secrets never leak through exception messages, reason strings,
+    or log lines (spec R4.2 secrets hygiene).
+    """
+    result = text
+    for secret in secrets:
+        if secret:
+            result = result.replace(secret, REDACTION_TOKEN)
+    return result

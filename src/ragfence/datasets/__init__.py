@@ -8,9 +8,10 @@ from ragfence.datasets.acme import (
     AcmeTenant,
     AcmeUser,
     build_acme_corp,
+    build_globex_corp,
 )
 from ragfence.datasets.constants import SEED
-from ragfence.datasets.loader import seed_acme_corp
+from ragfence.datasets.loader import seed_acme_corp, seed_reference_corp
 
 __all__ = [
     "AcmeCorpDataset",
@@ -21,5 +22,7 @@ __all__ = [
     "AcmeUser",
     "SEED",
     "build_acme_corp",
+    "build_globex_corp",
     "seed_acme_corp",
+    "seed_reference_corp",
 ]

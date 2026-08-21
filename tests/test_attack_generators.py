@@ -4,6 +4,7 @@ import pytest
 
 from ragfence.attacks.generators import bounded_top_k, generate_cases, validate_filters
 from ragfence.attacks.scenarios import scenario_catalog
+from ragfence.datasets.acme import build_acme_corp, build_globex_corp
 
 
 def test_same_seed_produces_byte_equal_cases() -> None:
@@ -37,6 +38,17 @@ def test_cases_use_scenario_specific_acme_actors_and_structured_options() -> Non
         assert case.metadata.scenario_id == case.scenario_id
         assert case.retrieval_options.document_id
         assert set(case.retrieval_options.filters) == {"document_id"}
+
+
+def test_cross_tenant_case_uses_an_actor_outside_the_target_document_tenant() -> None:
+    case = next(case for case in generate_cases() if case.scenario_id == "cross-tenant-retrieval")
+    target = build_acme_corp().documents[case.metadata.target_document]
+    persisted_actor = build_globex_corp().context_for(case.metadata.actor_email)
+
+    assert case.actor.is_authenticated is True
+    assert case.actor.tenant_id != target.tenant_id
+    assert case.retrieval_options.document_id == target.id
+    assert case.actor == persisted_actor
 
 
 def test_filter_bypass_top_k_is_bounded() -> None:

@@ -77,8 +77,13 @@ def render_text(report: EvaluationReport) -> str:
 
 
 def write_report(report: EvaluationReport, destination: Path, *, json_output: bool) -> Path:
-    """Write a report, creating its parent directory."""
+    """Write a report, creating its parent directory.
+
+    A ``.json`` destination always receives JSON, even without ``--json``:
+    the report must stay machine-parseable when its extension promises it.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
-    content = render_json(report) if json_output else render_text(report)
+    use_json = json_output or destination.suffix.lower() == ".json"
+    content = render_json(report) if use_json else render_text(report)
     destination.write_text(content, encoding="utf-8")
     return destination

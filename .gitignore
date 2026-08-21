@@ -18,6 +18,11 @@ env/
 .coverage
 htmlcov/
 
+# Local agent tooling state (never ship or commit)
+.atl/
+.codegraph/
+.hermes/
+
 # Environment files — keep the committed template, never the real one
 .env
 .env.*
