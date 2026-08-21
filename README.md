@@ -1,5 +1,11 @@
 # RAGFence
 
+[![CI](https://github.com/eduardbar/RAGfence/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardbar/RAGfence/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ragfence)](https://pypi.org/project/ragfence/)
+[![Python](https://img.shields.io/pypi/pyversions/ragfence)](https://pypi.org/project/ragfence/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Security policy](https://img.shields.io/badge/security-policy-8b5cf6)](SECURITY.md)
+
 Security testing and authorization-aware retrieval for production RAG systems.
 
 RAGFence is a Python library and CLI that helps teams build and verify RAG
@@ -7,11 +13,21 @@ pipelines that never leak. It provides authorization-aware retrieval primitives,
 a deterministic evaluation engine, and the `generic_http` adapter for testing an
 external RAG target.
 
-> **Status: v0.1.0 — production-ready release.** The evaluation and adapter contracts are
-> implemented and covered by offline tests. The reference database path is an
-> optional Docker-backed check; this repository does not claim a public CI run.
+> **Status: v0.1.0 — production-ready release.** The evaluation and adapter contracts
+> are implemented, covered by offline tests, and validated against a live
+> PostgreSQL/pgvector reference environment in CI.
 
-## Quickstart (offline)
+![RAGFence evaluation report sample](docs/assets/demo.svg)
+
+## Quickstart from PyPI
+
+```console
+pip install ragfence
+ragfence init
+ragfence test        # gate pass/fail; exit code 0 = passed
+```
+
+## Quickstart (offline, development)
 
 Requires Python >= 3.12. The offline quickstart needs no Docker, PostgreSQL,
 network access, API keys, or other external services.
@@ -125,7 +141,27 @@ errors.
 See the [documentation index](docs/README.md) for the product, technical,
 application-flow, schema, implementation-plan, and UI/UX documents.
 
+## Use in your CI
+
+Evaluate any pull request with the first-party action:
+
+```yaml
+jobs:
+  security-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: eduardbar/RAGfence@v1        # this repository's composite action
+        with:
+          adapter: reference                # or generic_http + base-url + start-target-command
+          threshold: '80'
+```
+
+The action provisions its own pgvector service, uploads the JSON report as an
+artifact, and fails the job when the evaluation gate fails (fail closed).
+
 - [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Changelog](CHANGELOG.md)
 

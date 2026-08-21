@@ -227,3 +227,52 @@ def test_reusable_workflow_gates_have_no_continue_on_error() -> None:
         assert not step.get("continue-on-error"), (
             f"step '{step.get('name')}' must not use continue-on-error"
         )
+
+
+def test_composite_action_contract() -> None:
+    """El action de Marketplace es composite, con pgvector, reporte y fail-closed."""
+    action_path = Path(__file__).parents[1] / "action.yml"
+    raw = action_path.read_text(encoding="utf-8")
+
+    # Composite + branding
+    assert "using: 'composite'" in raw or "using: composite" in raw
+    assert "icon: 'shield'" in raw
+
+    # Inputs documentados con defaults
+    for input_name in (
+        "adapter",
+        "threshold",
+        "base-url",
+        "start-target-command",
+        "fake-providers",
+        "ragfence-version",
+        "python-version",
+        "report-path",
+        "upload-report",
+    ):
+        assert f"  {input_name}:" in raw, f"falta input {input_name}"
+
+    # Provisiona pgvector con healthcheck y DSN consistente con el producto
+    assert "pgvector/pgvector:pg16" in raw
+    assert "pg_isready -U ragfence -d ragfence" in raw
+    assert "postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence" in raw
+
+    # Bootstrap idempotente del wheel + evaluación fail-closed
+    assert "ragfence init --up" in raw
+    assert "--json --output" in raw
+    assert "gate_passed=" in raw
+
+    # Acciones pinned y artifact garantizado
+    assert "actions/setup-python@v5" in raw
+    assert "actions/upload-artifact@v4" in raw
+    assert "if-no-files-found: error" in raw
+    assert "continue-on-error" not in raw
+
+
+def test_security_policy_documented() -> None:
+    """Existe política de divulgación privada con SLA y scope definidos."""
+    policy = (Path(__file__).parents[1] / "SECURITY.md").read_text(encoding="utf-8")
+    assert "/security/advisories/new" in policy, "debe usar private vulnerability reporting"
+    assert "Acknowledgement" in policy and "7 days" in policy
+    assert "Safe harbor" in policy
+    assert "Critical" in policy  # clasificación por severidad

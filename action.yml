@@ -1,0 +1,208 @@
+name: 'RAGFence Security Evaluation'
+description: >-
+  Run the RAGFence authorization-aware evaluation against the bundled pgvector
+  reference environment or an external HTTP RAG target, with a JSON report
+  artifact and a fail-closed exit status.
+author: 'eduardbar'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  adapter:
+    description: 'Adapter to evaluate: reference or generic_http.'
+    required: false
+    default: 'reference'
+  threshold:
+    description: 'Inclusive passing score from 0 to 100.'
+    required: false
+    default: '80'
+  base-url:
+    description: 'Target base URL (generic_http only).'
+    required: false
+    default: ''
+  start-target-command:
+    description: 'Quoted command used to start an external target service (generic_http only).'
+    required: false
+    default: ''
+  fake-providers:
+    description: 'Use deterministic local fake LLM/embedding providers.'
+    required: false
+    default: 'true'
+  ragfence-version:
+    description: 'ragfence version specifier passed to pip install.'
+    required: false
+    default: 'ragfence>=0.1,<2'
+  python-version:
+    description: 'Python version used to run the evaluation.'
+    required: false
+    default: '3.12'
+  report-path:
+    description: 'Destination of the machine-readable JSON report.'
+    required: false
+    default: '.ragfence/reports/ragfence-action.json'
+  upload-report:
+    description: "Upload the JSON report as a workflow artifact named 'ragfence-report'."
+    required: false
+    default: 'true'
+
+outputs:
+  report-path:
+    description: 'Path of the written JSON report.'
+    value: ${{ inputs.report-path }}
+  gate-passed:
+    description: "'true' when the evaluation gate passed."
+    value: ${{ steps.evaluate.outputs.gate_passed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        INPUT_ADAPTER: ${{ inputs.adapter }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_BASE_URL: ${{ inputs.base-url }}
+        INPUT_START_COMMAND: ${{ inputs.start-target-command }}
+      run: |
+        python - <<'PY'
+        import math
+        import os
+        from urllib.parse import urlparse
+
+        adapter = os.environ["INPUT_ADAPTER"].strip()
+        try:
+            threshold = float(os.environ["INPUT_THRESHOLD"])
+        except ValueError as error:
+            raise SystemExit("ragfence-action: threshold must be a number.") from error
+        if adapter not in {"reference", "generic_http"}:
+            raise SystemExit("ragfence-action: adapter must be 'reference' or 'generic_http'.")
+        if not math.isfinite(threshold) or not 0 <= threshold <= 100:
+            raise SystemExit("ragfence-action: threshold must satisfy 0 <= threshold <= 100.")
+        if adapter == "generic_http":
+            parsed = urlparse(os.environ["INPUT_BASE_URL"].strip())
+            start_command = os.environ["INPUT_START_COMMAND"].strip()
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc or not start_command:
+                raise SystemExit(
+                    "ragfence-action: generic_http requires a valid base-url and "
+                    "a start-target-command."
+                )
+        PY
+
+    - name: Start pgvector reference database
+      shell: bash
+      run: |
+        docker run -d --name ragfence-action-db \
+          -e POSTGRES_USER=ragfence \
+          -e POSTGRES_PASSWORD=ragfence \
+          -e POSTGRES_DB=ragfence \
+          -p 5434:5432 \
+          pgvector/pgvector:pg16
+        for attempt in $(seq 1 30); do
+          if docker exec ragfence-action-db pg_isready -U ragfence -d ragfence >/dev/null 2>&1; then
+            echo "pgvector ready after ${attempt} check(s)."
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "ragfence-action: pgvector did not become ready within 60 seconds." >&2
+        exit 2
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install ragfence
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "${{ inputs.ragfence-version }}"
+
+    - name: Initialize reference environment
+      shell: bash
+      env:
+        RAGFENCE_DATABASE_DSN: postgresql+psycopg://ragfence:ragfence@localhost:5434/ragfence
+      # Idempotent: with the database already reachable, init --up skips Docker
+      # Compose and migrates + seeds in place using the packaged reference assets.
+      run: |
+        mkdir -p "$(dirname '${{ inputs.report-path }}')"
+        ragfence init --up
+
+    - name: Start external target
+      if: ${{ inputs.start-target-command != '' }}
+      shell: bash
+      env:
+        START_COMMAND: ${{ inputs.start-target-command }}
+      run: |
+        bash -c -- "$START_COMMAND" > .ragfence/target.log 2>&1 &
+        printf '%s\n' "$!" > .ragfence/target.pid
+
+    - name: Wait for target readiness
+      if: ${{ inputs.base-url != '' }}
+      shell: bash
+      env:
+        BASE_URL: ${{ inputs.base-url }}
+      run: |
+        for attempt in $(seq 1 30); do
+          code=$(python - <<'PY'
+        import os, urllib.request
+        url = os.environ["BASE_URL"]
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                print(response.status)
+        except OSError:
+            print("0")
+        PY
+          )
+          if [ "$code" != "0" ] && [ "$code" -lt 500 ]; then
+            echo "target ready after ${attempt} check(s)."
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "ragfence-action: target not ready within 60 seconds." >&2
+        exit 2
+
+    - name: Run RAGFence evaluation
+      id: evaluate
+      shell: bash
+      env:
+        ADAPTER: ${{ inputs.adapter }}
+        BASE_URL: ${{ inputs.base-url }}
+        REPORT_PATH: ${{ inputs.report-path }}
+        FAKE_PROVIDERS: ${{ inputs.fake-providers }}
+        THRESHOLD: ${{ inputs.threshold }}
+      run: |
+        set +e
+        if [ "$FAKE_PROVIDERS" = "true" ]; then
+          export RAGFENCE_LLM_PROVIDER=fake
+          export RAGFENCE_EMBEDDING_PROVIDER=fake
+        fi
+        CLI_THRESHOLD=$(python -c "import os; print(float(os.environ['THRESHOLD']) / 100.0)")
+        ARGS=(test --adapter "$ADAPTER" --threshold "$CLI_THRESHOLD" --json --output "$REPORT_PATH")
+        if [ "$ADAPTER" = "generic_http" ]; then
+          ARGS+=(--base-url "$BASE_URL")
+        fi
+        ragfence "${ARGS[@]}"
+        status=$?
+        set -e
+        gate=false
+        if [ "$status" = "0" ]; then gate=true; fi
+        {
+          printf 'gate_passed=%s\n' "$gate"
+        } >> "$GITHUB_OUTPUT"
+        case "$status" in
+          0|1|2) exit "$status" ;;
+          *) exit 2 ;;
+        esac
+
+    - name: Upload report artifact
+      if: ${{ always() && inputs.upload-report == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ragfence-report
+        path: ${{ inputs.report-path }}
+        if-no-files-found: error
+        retention-days: 14

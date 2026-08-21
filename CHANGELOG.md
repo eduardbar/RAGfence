@@ -2,6 +2,19 @@
 
 All notable changes to RAGFence are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [Unreleased]
+
+### Added
+
+- `SECURITY.md`: vulnerability disclosure policy with private reporting,
+  triage timelines, scope, and safe harbor.
+- First-party GitHub Action (`action.yml`, composite): provisions pgvector,
+  installs `ragfence`, runs the fail-closed evaluation, uploads the JSON
+  report artifact, and exposes a `gate-passed` output. Marketplace-ready via
+  the `eduardbar/ragfence-action@v1` tag.
+- README badges (CI, PyPI, Python versions, license, security policy) and a
+  sample evaluation-report graphic; PyPI-first quickstart section.
+
 ## [0.1.0] - 2026-08-21
 
 ### Added

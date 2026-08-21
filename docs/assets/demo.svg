@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" font-family="Consolas, 'Courier New', monospace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1025"/>
+      <stop offset="1" stop-color="#0d0812"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="638" height="238" rx="10" fill="url(#bg)" stroke="#7c3aed" stroke-width="1.5"/>
+  <rect x="12" y="12" width="36" height="14" rx="4" fill="#2d1b45"/>
+  <circle cx="18" cy="19" r="3" fill="#f43f5e"/><circle cx="28" cy="19" r="3" fill="#fbbf24"/><circle cx="38" cy="19" r="3" fill="#34d399"/>
+  <text x="58" y="22" fill="#9ca3af" font-size="11">ragfence test --output report.json</text>
+  <text x="20" y="52" fill="#e5e7eb" font-size="13">RAGFence evaluation report</text>
+  <text x="20" y="76" fill="#34d399" font-size="13">gate_passed: true&#160;&#160;outcome: pass</text>
+  <text x="20" y="100" fill="#e5e7eb" font-size="13">security 1.0 &#160;utility 1.0 &#160;overall 1.0</text>
+  <g font-size="12">
+    <text x="20" y="130" fill="#34d399">&#10003; same-tenant-authorized</text>
+    <text x="330" y="130" fill="#34d399">&#10003; public-same-tenant</text>
+    <text x="20" y="152" fill="#f43f5e">&#10007; same-tenant-no-permission blocked</text>
+    <text x="330" y="152" fill="#f43f5e">&#10007; cross-tenant blocked</text>
+    <text x="20" y="174" fill="#f43f5e">&#10007; soft-deleted-document blocked</text>
+    <text x="330" y="174" fill="#f43f5e">&#10007; insufficient-clearance blocked</text>
+  </g>
+  <text x="20" y="204" fill="#8b5cf6" font-size="11">$ pip install ragfence &#160;&#160;&#160;# authorization-aware retrieval testing for RAG</text>
+  <text x="20" y="222" fill="#6b7280" font-size="10">8/8 required controls &#183; fail-closed gate &#183; secrets redacted from evidence</text>
+</svg>
