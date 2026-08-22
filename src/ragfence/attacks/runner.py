@@ -9,7 +9,7 @@ from typing import Any, Protocol, cast
 from uuid import UUID
 
 from ragfence.attacks.generators import MAX_TOP_K, bounded_top_k, validate_filters
-from ragfence.attacks.scenarios import scenario_catalog
+from ragfence.attacks.scenarios import injection_scenario_catalog, scenario_catalog
 from ragfence.core.models import EvaluationCase, RetrievalRequest, RetrievedChunk
 
 
@@ -51,7 +51,11 @@ class ScenarioVerdict:
 
 
 def _oracle(case: EvaluationCase) -> ScenarioOracle:
-    scenario = next(item for item in scenario_catalog() if item.id == case.scenario_id)
+    scenario = next(
+        item
+        for item in (*scenario_catalog(), *injection_scenario_catalog())
+        if item.id == case.scenario_id
+    )
     return ScenarioOracle(scenario.target_stage, case.expected_allow)
 
 
