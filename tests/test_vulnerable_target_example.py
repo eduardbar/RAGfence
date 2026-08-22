@@ -8,7 +8,6 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
-
 _APP = Path(__file__).parents[1] / "examples" / "vulnerable-target" / "app.py"
 _SPEC = spec_from_file_location("vulnerable_target_app", _APP)
 assert _SPEC and _SPEC.loader
@@ -25,9 +24,15 @@ def test_target_serves_generic_http_retrieve_contract() -> None:
     payload = response.json()
     assert set(payload) == {"chunks"}
     assert payload["chunks"]
-    assert {"chunk_id", "document_id", "document_title", "chunk_index", "content", "score", "metadata"} <= set(
-        payload["chunks"][0]
-    )
+    assert {
+        "chunk_id",
+        "document_id",
+        "document_title",
+        "chunk_index",
+        "content",
+        "score",
+        "metadata",
+    } <= set(payload["chunks"][0])
 
 
 def test_acme_default_tenant_leaks_globex_document() -> None:

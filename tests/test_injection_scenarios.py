@@ -1,7 +1,5 @@
 """Indirect prompt-injection cases carried by retrieved document content."""
 
-import json
-
 from ragfence.attacks.generators import generate_injection_cases
 from ragfence.attacks.runner import run_case
 from ragfence.evaluation.report import build_report, render_json

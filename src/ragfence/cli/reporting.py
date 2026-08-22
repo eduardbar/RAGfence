@@ -92,13 +92,13 @@ def load_baseline(path: Path) -> dict[str, Any]:
 def find_regressions(baseline: dict[str, Any], current: EvaluationReport) -> list[dict[str, str]]:
     """Compare baseline PASS controls and gate status with the current report."""
     baseline_controls = {
-        item.get("id"): item.get("status")
+        str(item["id"]): str(item.get("status"))
         for item in baseline["controls"]
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
     current_payload = report_payload(current)
     current_controls = {
-        item.get("id"): item.get("status")
+        str(item["id"]): str(item.get("status"))
         for item in current_payload.get("controls", [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
@@ -106,7 +106,7 @@ def find_regressions(baseline: dict[str, Any], current: EvaluationReport) -> lis
     for control_id, before in baseline_controls.items():
         after = current_controls.get(control_id)
         if before == "pass" and after in {"fail", "inconclusive", "skipped"}:
-            regressions.append({"control_id": control_id, "from": before, "to": after})
+            regressions.append({"control_id": control_id, "from": str(before), "to": str(after)})
     if baseline.get("gate_passed") is True and current_payload.get("gate_passed") is False:
         regressions.append({"control_id": "gate", "from": "pass", "to": "fail"})
     return regressions

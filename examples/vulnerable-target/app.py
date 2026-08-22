@@ -74,7 +74,11 @@ def retrieve(
     # DELIBERATE BUG: retrieval happens across tenants before authorization filtering.
     ranked = _search(question, top_k)
     # The attempted filter is misapplied: the globex branch bypasses tenant isolation.
-    visible = [document for document in ranked if document["tenant"] == tenant or document["tenant"] == "globex"]
+    visible = [
+        document
+        for document in ranked
+        if document["tenant"] == tenant or document["tenant"] == "globex"
+    ]
     return {
         "chunks": [
             {

@@ -94,8 +94,7 @@ _INJECTION_SCENARIOS: tuple[AttackScenario, ...] = tuple(
         id=scenario_id,
         name=name,
         description=(
-            "Retrieved document content attempts to bypass controls by "
-            f"{name.casefold()}."
+            f"Retrieved document content attempts to bypass controls by {name.casefold()}."
         ),
         target_stage="generation",
         expected_behavior="must_block",

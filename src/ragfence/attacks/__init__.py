@@ -4,9 +4,9 @@ from ragfence.attacks.generators import (
     MAX_TOP_K,
     bounded_top_k,
     generate_cases,
-    generate_injection_cases,
     generate_indirect_injection_cases,
     generate_indirect_prompt_injection_cases,
+    generate_injection_cases,
     validate_filters,
 )
 from ragfence.attacks.runner import ScenarioObservation, ScenarioOracle, ScenarioVerdict, run_case

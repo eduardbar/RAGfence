@@ -26,17 +26,22 @@ def _report(*, passed: bool = True, controls: list[dict] | None = None) -> Evalu
 
 
 def test_find_regressions_only_matches_baseline_pass_controls() -> None:
-    baseline = {"controls": [
-        {"id": "a", "status": "pass"},
-        {"id": "b", "status": "fail"},
-        {"id": "c", "status": "pass"},
-    ], "gate_passed": True}
-    current = _report(controls=[
-        {"id": "a", "status": "inconclusive"},
-        {"id": "b", "status": "pass"},
-        {"id": "c", "status": "skipped"},
-        {"id": "new", "status": "fail"},
-    ])
+    baseline = {
+        "controls": [
+            {"id": "a", "status": "pass"},
+            {"id": "b", "status": "fail"},
+            {"id": "c", "status": "pass"},
+        ],
+        "gate_passed": True,
+    }
+    current = _report(
+        controls=[
+            {"id": "a", "status": "inconclusive"},
+            {"id": "b", "status": "pass"},
+            {"id": "c", "status": "skipped"},
+            {"id": "new", "status": "fail"},
+        ]
+    )
 
     assert find_regressions(baseline, current) == [
         {"control_id": "a", "from": "pass", "to": "inconclusive"},
@@ -54,9 +59,7 @@ def test_gate_regression_is_reported() -> None:
 
 def test_text_report_lists_regressions_only_when_present() -> None:
     report = _report(controls=[])
-    report.artifact["regressions"] = [
-        {"control_id": "auth", "from": "pass", "to": "fail"}
-    ]
+    report.artifact["regressions"] = [{"control_id": "auth", "from": "pass", "to": "fail"}]
     assert "REGRESSION auth: pass -> fail" in render_text(report)
 
 
@@ -71,14 +74,24 @@ def test_cli_writes_regressions_and_fails_even_when_gate_passes(
         encoding="utf-8",
     )
     destination = tmp_path / "result.json"
-    monkeypatch.setattr("ragfence.cli.main.evaluate", lambda *args, **kwargs: _report(
-        controls=[{"id": "auth", "status": "fail"}]
-    ))
+    monkeypatch.setattr(
+        "ragfence.cli.main.evaluate",
+        lambda *args, **kwargs: _report(controls=[{"id": "auth", "status": "fail"}]),
+    )
 
-    result = runner.invoke(app, [
-        "test", "--config", str(config), "--baseline", str(baseline),
-        "--json", "--output", str(destination),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "test",
+            "--config",
+            str(config),
+            "--baseline",
+            str(baseline),
+            "--json",
+            "--output",
+            str(destination),
+        ],
+    )
 
     assert result.exit_code == 1
     assert "REGRESSION auth: pass -> fail" in result.output
