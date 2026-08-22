@@ -1,6 +1,10 @@
 """Indirect prompt-injection cases carried by retrieved document content."""
 
-from ragfence.attacks.generators import generate_injection_cases
+from ragfence.attacks.generators import (
+    generate_cross_session_leakage_cases,
+    generate_injection_cases,
+    generate_metadata_injection_cases,
+)
 from ragfence.attacks.runner import run_case
 from ragfence.evaluation.report import build_report, render_json
 
@@ -42,6 +46,65 @@ def test_injection_content_is_not_emitted_in_rendered_findings() -> None:
     rendered = render_json(build_report(None, [result]))
     assert "TENANT_SECRET=" not in rendered
     assert "do-not-render" not in rendered
+
+
+def test_metadata_and_cross_session_families_are_deterministic_and_non_gate() -> None:
+    generators = (generate_metadata_injection_cases, generate_cross_session_leakage_cases)
+    expected_ids = (
+        {
+            "metadata-injection-public-claim",
+            "metadata-injection-role-claim",
+            "metadata-injection-instruction",
+        },
+        {
+            "cross-session-leakage-continue-context",
+            "cross-session-leakage-previous-user",
+            "cross-session-leakage-reuse-retrieval",
+        },
+    )
+    for generate, ids in zip(generators, expected_ids, strict=True):
+        assert [case.model_dump_json() for case in generate(seed=42)] == [
+            case.model_dump_json() for case in generate(seed=42)
+        ]
+        cases = generate(seed=42)
+        assert {case.scenario_id for case in cases} == ids
+        assert all(case.expected_allow is False for case in cases)
+        assert all(case.required_for_gate is False for case in cases)
+
+    metadata_cases = generate_metadata_injection_cases(seed=42)
+    assert all(case.retrieved_document_metadata for case in metadata_cases)
+    assert all(case.retrieved_document_content for case in metadata_cases)
+    assert any(
+        "public" in str(case.retrieved_document_metadata).casefold() for case in metadata_cases
+    )
+
+
+def test_new_attack_payloads_are_redaction_compatible() -> None:
+    cases = generate_metadata_injection_cases(seed=42) + generate_cross_session_leakage_cases(
+        seed=42
+    )
+    for case in cases:
+        verdict = run_case(case, SafeTarget())
+        from ragfence.evaluation.engine import EvaluationEngine
+
+        rendered = render_json(
+            build_report(None, [EvaluationEngine(SafeTarget())._result(verdict)])
+        )
+        assert case.retrieved_document_content not in rendered
+        assert "authorization claim" not in rendered
+        assert "previous user" not in rendered
+
+
+def test_runner_executes_new_families_without_gate_effect() -> None:
+    cases = generate_metadata_injection_cases(seed=7) + generate_cross_session_leakage_cases(seed=7)
+    verdicts = [run_case(case, SafeTarget()) for case in cases]
+
+    assert all(verdict.passed for verdict in verdicts)
+    assert all(verdict.case.expected_allow is False for verdict in verdicts)
+    assert all(verdict.observation.error is None for verdict in verdicts)
+    from ragfence.attacks.generators import generate_cases
+
+    assert not {case.id for case in cases} & {case.id for case in generate_cases(seed=7)}
 
 
 def test_runner_executes_all_injection_cases_without_gate_effect() -> None:
