@@ -15,7 +15,13 @@ from sqlalchemy.orm import Session
 
 from ragfence.cli.config import ConfigError, load_config
 from ragfence.cli.errors import RuntimeCommandError
-from ragfence.cli.reporting import render_json, render_text, write_report
+from ragfence.cli.reporting import (
+    find_regressions,
+    load_baseline,
+    render_json,
+    render_text,
+    write_report,
+)
 from ragfence.cli.seams import check_adapter, check_demo, default_report_path, evaluate
 from ragfence.datasets import seed_reference_corp
 
@@ -151,6 +157,7 @@ def test_command(
     threshold: float | None = typer.Option(None, help="Minimum passing score."),  # noqa: B008
     json_output: bool = typer.Option(False, "--json", help="Render JSON output."),  # noqa: B008
     output: Path | None = typer.Option(None, "--output", help="Explicit report destination."),  # noqa: B008
+    baseline: Path | None = typer.Option(None, "--baseline", help="Previous JSON report."),  # noqa: B008
 ) -> None:
     """Run the configured RAGFence evaluation suite."""
     config_path, explicit_config = _resolve_config(config)
@@ -165,7 +172,10 @@ def test_command(
                 adapter=settings.adapter,
                 generic_http=settings.generic_http,
             )
+        baseline_payload = load_baseline(baseline) if baseline is not None else None
         report = evaluate(settings, adapter=adapter, base_url=base_url)
+        if baseline_payload is not None:
+            report.artifact["regressions"] = find_regressions(baseline_payload, report)  # type: ignore[index]
         destination = write_report(
             report,
             output or default_report_path(config_path, json_output=json_output),
@@ -179,9 +189,18 @@ def test_command(
         raise typer.Exit(code=2) from exc
     rendered_output = render_json(report) if json_output else render_text(report)
     typer.echo(rendered_output, nl=False)
+    regressions = report.artifact.get("regressions", []) if report.artifact else []
+    if regressions:
+        typer.echo("Regressions:", err=True)
+        for regression in regressions:
+            typer.echo(
+                f"REGRESSION {regression['control_id']}: "
+                f"{regression['from']} -> {regression['to']}",
+                err=True,
+            )
     gate_passed = report.artifact.get("gate_passed") if report.artifact else None
     if gate_passed is not None:
-        if not gate_passed:
+        if not gate_passed or regressions:
             raise typer.Exit(code=1)
     elif report.score < report.threshold:
         raise typer.Exit(code=1)
