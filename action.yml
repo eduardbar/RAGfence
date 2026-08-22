@@ -1,8 +1,5 @@
 name: 'RAGFence Security Evaluation'
-description: >-
-  Run the RAGFence authorization-aware evaluation against the bundled pgvector
-  reference environment or an external HTTP RAG target, with a JSON report
-  artifact and a fail-closed exit status.
+description: Run fail-closed authorization security evaluation for RAG apps against a pgvector reference or external HTTP target.
 author: 'eduardbar'
 
 branding:
