@@ -75,7 +75,9 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path: Path) -> None:
         env=env,
     )
     assert probe.returncode == 0, probe.stdout + probe.stderr
-    assert probe.stdout.strip() == "0.1.0"
+    import ragfence
+
+    assert probe.stdout.strip() == ragfence.__version__
     script = venv_dir / ("Scripts/ragfence.exe" if os.name == "nt" else "bin/ragfence")
     help_result = _run([str(script), "--help"], cwd=tmp_path, env=env)
     assert help_result.returncode == 0, help_result.stdout + help_result.stderr

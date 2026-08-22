@@ -2,7 +2,37 @@
 
 All notable changes to RAGFence are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-## [Unreleased]
+## [0.2.0] - 2026-08-22
+
+### Added
+
+- Security regression detection: `ragfence test --baseline <report.json>`
+  compares per-control status against a previous run, lists regressions in
+  text output, adds a `regressions` array to the JSON report, and exits 1 when
+  a previously passing control or gate regresses — even if the current gate
+  passes.
+- Policy profiles: `ragfence test --profile {default,strict,permissive}` with
+  documented threshold precedence (explicit flag > profile > config); strict
+  additionally fails closed when any control is not PASS.
+- Standalone HTML report viewer: `ragfence report <report.json>` renders a
+  self-contained, fully HTML-escaped report (scores, outcome badge, controls,
+  findings) with optional `--output` and `--open`.
+- Non-gate indirect prompt injection attack scenarios: retrieved-content
+  exfiltration, ACL override, hidden-chunk disclosure, metadata injection,
+  and cross-session leakage — deterministic, redaction-safe, additive to the
+  frozen 8-control production matrix.
+- Qdrant vector store adapter (`QdrantVectorStore`) mirroring the ACL
+  semantics as payload pre-filters via `build_qdrant_filter`, with in-memory
+  test coverage; installable through the new `qdrant` extra.
+- Vulnerable demo target (`examples/vulnerable-target/`) with the classic
+  filter-after-retrieval bug, wire-contract tests, and a break-fix tutorial
+  (`docs/tutorials/broken-rag.md`).
+- Docker image assets: non-root `Dockerfile` and `docker-publish.yml`
+  workflow publishing `ghcr.io/eduardbar/ragfence` on releases.
+- First-party GitHub Action (`action.yml`) published to the GitHub
+  Marketplace as RAGFence Security Evaluation.
+- `SECURITY.md` vulnerability disclosure policy; README badges and sample
+  evaluation graphic; PyPI-first quickstart.
 
 ### Added
 

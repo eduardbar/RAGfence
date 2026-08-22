@@ -29,7 +29,7 @@ def test_package_imports() -> None:
 
 
 def test_version_string_present() -> None:
-    assert ragfence.__version__ == "0.1.0"
+    assert ragfence.__version__ == "0.2.0"
 
 
 def test_all_subpackages_import() -> None:
