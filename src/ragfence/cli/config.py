@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -24,6 +24,24 @@ class CliConfig:
     threshold: float = 0.8
     adapter: str = "reference"
     generic_http: GenericHTTPConfig | None = None
+
+
+def apply_profile(settings: CliConfig, profile: str) -> CliConfig:
+    """Apply a policy profile without mutating the loaded configuration.
+
+    CLI configuration thresholds use the legacy 0–1 scale, so the profile
+    boundaries of 95 and 60 are represented as 0.95 and 0.60 here.  The
+    evaluation seam converts the resulting value to its 0–100 scale.
+    """
+    if profile == "default":
+        threshold = settings.threshold
+    elif profile == "strict":
+        threshold = max(settings.threshold, 0.95)
+    elif profile == "permissive":
+        threshold = min(settings.threshold, 0.60)
+    else:
+        raise ValueError(f"unsupported policy profile: {profile}")
+    return replace(settings, threshold=threshold)
 
 
 def load_config(

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
+import webbrowser
 from pathlib import Path
+from typing import Literal
 
 import typer
 from alembic import command
@@ -13,8 +16,9 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from ragfence.cli.config import ConfigError, load_config
+from ragfence.cli.config import ConfigError, apply_profile, load_config
 from ragfence.cli.errors import RuntimeCommandError
+from ragfence.cli.report_html import render_html
 from ragfence.cli.reporting import (
     find_regressions,
     load_baseline,
@@ -154,7 +158,16 @@ def test_command(
     config: Path | None = typer.Option(None, help="Configuration file."),  # noqa: B008
     adapter: str | None = typer.Option(None, help="Adapter name."),  # noqa: B008
     base_url: str | None = typer.Option(None, help="Target base URL."),  # noqa: B008
-    threshold: float | None = typer.Option(None, help="Minimum passing score."),  # noqa: B008
+    threshold: float | None = typer.Option(None, help="Minimum passing score (0–1)."),  # noqa: B008
+    profile: Literal["default", "strict", "permissive"] = typer.Option(
+        "default",
+        "--profile",
+        help=(
+            "Policy profile: default uses config threshold; strict forces at least 95% "
+            "and requires every control to PASS; permissive caps threshold at 60%. "
+            "Precedence: explicit flag > profile > config."
+        ),
+    ),  # noqa: B008
     json_output: bool = typer.Option(False, "--json", help="Render JSON output."),  # noqa: B008
     output: Path | None = typer.Option(None, "--output", help="Explicit report destination."),  # noqa: B008
     baseline: Path | None = typer.Option(None, "--baseline", help="Previous JSON report."),  # noqa: B008
@@ -166,6 +179,7 @@ def test_command(
         selected_adapter = settings.adapter if adapter is None else adapter
         if base_url is not None and selected_adapter == "generic_http":
             settings = load_config(config_path, base_url_override=base_url, require=explicit_config)
+        settings = apply_profile(settings, profile)
         if threshold is not None:
             settings = settings.__class__(
                 threshold=threshold,
@@ -198,6 +212,24 @@ def test_command(
                 f"{regression['from']} -> {regression['to']}",
                 err=True,
             )
+    if profile == "strict":
+        controls = report.artifact.get("controls", []) if report.artifact else []
+        non_passing: list[str] = []
+        if isinstance(controls, list):
+            for control in controls:
+                if not isinstance(control, dict):
+                    continue
+                status = control.get("status")
+                status_value = getattr(status, "value", status)
+                if str(status_value).upper() != "PASS":
+                    non_passing.append(str(control.get("id", "unknown")))
+        if non_passing:
+            typer.echo(
+                "strict profile failed; non-passing controls: " + ", ".join(non_passing),
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     gate_passed = report.artifact.get("gate_passed") if report.artifact else None
     if gate_passed is not None:
         if not gate_passed or regressions:
@@ -205,6 +237,46 @@ def test_command(
     elif report.score < report.threshold:
         raise typer.Exit(code=1)
     typer.echo(f"report written: {destination}", err=True)
+
+
+@app.command("report")
+def report_command(
+    report_path: Path = typer.Argument(..., help="JSON report to view."),  # noqa: B008
+    output: Path | None = typer.Option(None, "--output", help="HTML destination."),  # noqa: B008
+    open_report: bool = typer.Option(
+        False, "--open", help="Open the generated HTML report in a browser."
+    ),  # noqa: B008
+) -> None:
+    """Convert a JSON report into a standalone HTML viewer."""
+    try:
+        try:
+            raw_payload = report_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ValueError(f"cannot read report '{report_path}': {exc}") from exc
+        try:
+            payload = json.loads(raw_payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid report '{report_path}': invalid JSON ({exc.msg})") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("outcome"), str):
+            raise ValueError(
+                f"invalid report '{report_path}': expected a JSON object with an outcome"
+            )
+        controls = payload.get("controls")
+        if controls is not None and not isinstance(controls, list):
+            raise ValueError(f"invalid report '{report_path}': controls must be a list")
+        destination = output or report_path.with_suffix(".html")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(render_html(payload), encoding="utf-8")
+    except ValueError as exc:
+        typer.echo(f"command failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    except OSError as exc:
+        typer.echo(f"command failed: cannot write HTML report: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    if open_report:
+        webbrowser.open(destination.resolve().as_uri())
+    typer.echo(f"HTML report written: {destination}")
 
 
 @app.command()
