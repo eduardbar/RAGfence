@@ -1,0 +1,15 @@
+# Run from the repository root with: ragfence test --config examples/vulnerable-target/ragfence-generic-http.toml
+adapter = "generic_http"
+threshold = 0.8
+
+[adapters.generic_http]
+base_url = "http://127.0.0.1:8000"
+retrieve_path = "retrieve"
+health_path = "health"
+timeout_seconds = 5.0
+health_retries = 2
+health_backoff_seconds = 0.25
+
+[adapters.generic_http.identity]
+kind = "headers"
+headers = { "X-Tenant-ID" = "{actor_tenant_id}" }
